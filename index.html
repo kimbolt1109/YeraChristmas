@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c1220">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Yera noona — Christmas</title>
+  <meta name="description" content="A small Christmas letter. Eve and Christmas Day.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Yera noona — Christmas">
+  <meta property="og:description" content="A small Christmas letter. Eve and Christmas Day.">
+  <meta property="og:type" content="website">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js"></script>
+</head>
+<body>
+  <!-- Background Canvas & Ambient Deco -->
+  <canvas id="snow-canvas"></canvas>
+  <div class="candle-glow"></div>
+  <div class="string-lights" id="string-lights">
+    <div class="string-light-bulb"></div>
+    <div class="string-light-bulb"></div>
+    <div class="string-light-bulb"></div>
+    <div class="string-light-bulb"></div>
+    <div class="string-light-bulb"></div>
+    <div class="string-light-bulb"></div>
+    <div class="string-light-bulb"></div>
+  </div>
+
+  <!-- Main Container -->
+  <div id="app">
+    <!-- Sticky Navigation Top Bar -->
+    <header class="top-bar">
+      <nav class="progress-nav" id="progress-nav">
+        <span class="progress-step active" data-step="0"><span class="icon">✉</span> Letter</span>
+        <span class="icon">→</span>
+        <span class="progress-step" data-step="1"><span class="icon">📅</span> Plans</span>
+        <span class="icon">→</span>
+        <span class="progress-step" data-step="2"><span class="icon">🎄</span> Invite</span>
+        <span class="icon">→</span>
+        <span class="progress-step" data-step="3"><span class="icon">⏰</span> Time</span>
+        <span class="icon">→</span>
+        <span class="progress-step" data-step="4"><span class="icon">📍</span> Place</span>
+        <span class="icon">→</span>
+        <span class="progress-step" data-step="6"><span class="icon">⭐</span> D-day</span>
+      </nav>
+      <button class="audio-toggle" id="audio-toggle" aria-label="Toggle audio">
+        <span id="audio-icon">♪</span>
+        <span id="audio-text">Snow over the village</span>
+      </button>
+    </header>
+
+    <!-- Scene Viewports Container -->
+    <main class="scene-container" id="scene-container">
+
+      <!-- SCENE 0: LANDING / ENVELOPE -->
+      <section class="scene active" id="scene-0">
+        <div class="envelope-container">
+          <span class="eyebrow">A quiet invitation</span>
+          <h1 class="headline">For Yera noona <br><span class="highlight">예라 누나</span></h1>
+
+          <div class="envelope-wrapper" id="envelope-wrapper">
+            <div class="envelope-body">
+              <div class="envelope-flap"></div>
+              <div class="wax-seal" id="wax-seal">
+                <span>YN</span>
+              </div>
+            </div>
+          </div>
+
+          <p class="envelope-caption">A Christmas letter<br>you haven’t opened yet</p>
+
+          <button class="btn-primary" id="btn-open-letter" style="margin-top: 24px;">
+            Open the letter
+          </button>
+        </div>
+      </section>
+
+      <!-- SCENE 1: ALREADY BUSY? -->
+      <section class="scene" id="scene-1">
+        <span class="eyebrow">One thing first</span>
+        <h2 class="headline">Do you already have a promise<br>or a family meeting<br>on Christmas Eve or Christmas?</h2>
+        <p class="subhead">That’s Thursday the 24th and Friday the 25th.<br>If you do, that comes first. Obviously.</p>
+
+        <div class="card" id="card-free">
+          <div class="card-label">No, I’m free</div>
+          <div class="card-helper">Those days are still open</div>
+        </div>
+
+        <div class="card" id="card-busy">
+          <div class="card-label">Yes, I’m busy</div>
+          <div class="card-helper">A promise or a family meeting</div>
+        </div>
+
+        <a class="link-secondary" id="link-unsure">I’m not sure yet</a>
+      </section>
+
+      <!-- HIDDEN ENDING A: SHE HAS PLANS -->
+      <section class="scene" id="scene-ending-a">
+        <span class="eyebrow">Warm wishes</span>
+        <h2 class="headline">Then that comes first.</h2>
+        <p class="subhead">This is not a letter asking you to cancel anything.<br><br>You can still leave this page open and watch the snow.<br>If another day works, leave a line below.</p>
+
+        <div class="custom-input-group">
+          <textarea class="textarea-input" id="busy-memo-input" placeholder="Another day works / I probably can’t / …"></textarea>
+        </div>
+
+        <button class="btn-primary" id="btn-save-busy-note">Save the note</button>
+        <button class="btn-secondary" id="btn-watch-snow">Just watch the snow</button>
+
+        <div style="margin-top: 28px;" id="compact-dday-container-a"></div>
+      </section>
+
+      <!-- SCENE 2: INVITATION + RUNAWAY NO BUTTON -->
+      <section class="scene" id="scene-2">
+        <span class="eyebrow" id="invite-eyebrow">Then…</span>
+        <h2 class="headline" id="invite-headline">Want to go out<br>and hang out with me<br>at Christmas?</h2>
+        <p class="subhead">Nothing huge.<br>Walk around somewhere pretty,<br>get something warm,<br>that kind of day.</p>
+
+        <div class="invite-button-zone" id="invite-button-zone">
+          <button class="btn-primary" id="btn-yes-invite">Yes, let’s hang out</button>
+
+          <div class="ghost-slot" id="ghost-slot">It used to sit here</div>
+
+          <button class="btn-no-runaway" id="btn-no-runaway">No</button>
+        </div>
+      </section>
+
+      <!-- HIDDEN ENDING B: SHE REALLY SAID NO -->
+      <section class="scene" id="scene-ending-b">
+        <span class="eyebrow">Quiet Christmas</span>
+        <h2 class="headline">Okay.<br>You even caught the button<br>that runs away.</h2>
+        <p class="subhead">If we don’t go,<br>have a quiet, pretty Christmas anyway.</p>
+
+        <div style="margin-top: 28px;" id="compact-dday-container-b"></div>
+      </section>
+
+      <!-- SCENE 3: COMFORTABLE TIME -->
+      <section class="scene" id="scene-3">
+        <span class="eyebrow">A time that feels easy</span>
+        <h2 class="headline">When is comfortable?</h2>
+        <p class="subhead">Tap every slot that works.<br>More than one is fine.</p>
+
+        <div class="time-grid">
+          <div class="time-tile" data-time="eve-morning">
+            <div class="time-checkbox">✓</div>
+            <div>
+              <div class="time-title">Christmas Eve morning</div>
+              <div class="time-sub">Thu 24 Dec, morning</div>
+              <div class="time-note">Quieter. Better photos.</div>
+            </div>
+          </div>
+
+          <div class="time-tile" data-time="eve-lunch">
+            <div class="time-checkbox">✓</div>
+            <div>
+              <div class="time-title">Christmas Eve lunch</div>
+              <div class="time-sub">Thu 24 Dec, midday</div>
+              <div class="time-note">Eat, then walk.</div>
+            </div>
+          </div>
+
+          <div class="time-tile" data-time="eve-dinner">
+            <div class="time-checkbox">✓</div>
+            <div>
+              <div class="time-title">Christmas Eve dinner</div>
+              <div class="time-sub">Thu 24 Dec, evening</div>
+              <div class="time-note">Lights at their best.</div>
+            </div>
+          </div>
+
+          <div class="time-tile" data-time="xmas-after-church">
+            <div class="time-checkbox">✓</div>
+            <div>
+              <div class="time-title">Christmas Day after church</div>
+              <div class="time-sub">Fri 25 Dec, after service</div>
+              <div class="time-note">After church, no rush.</div>
+            </div>
+          </div>
+        </div>
+
+        <a class="link-secondary" id="link-time-unsure">I’m not sure yet</a>
+
+        <button class="btn-primary" id="btn-submit-time" style="margin-top: 20px;">Use these times</button>
+      </section>
+
+      <!-- SCENE 4: PLACES -->
+      <section class="scene" id="scene-4">
+        <span class="eyebrow">Where we could walk</span>
+        <h2 class="headline">Which places sound good?</h2>
+        <p class="subhead">Look at the photos.<br>Pick the ones you like.<br>We can change later.</p>
+
+        <!-- Filter Chips -->
+        <div class="filter-scroll">
+          <button class="filter-chip active" data-filter="all">All</button>
+          <button class="filter-chip" data-filter="indoor">Indoor</button>
+          <button class="filter-chip" data-filter="outdoor">Outdoor</button>
+          <button class="filter-chip" data-filter="less-crowded">Less crowded</button>
+        </div>
+
+        <div class="place-card-list" id="place-card-list">
+          <!-- Dynamically populated place cards -->
+        </div>
+
+        <div class="card custom-input-group" style="margin-top: 16px;">
+          <div class="card-label">Somewhere else</div>
+          <input type="text" class="text-input" id="custom-place-input" placeholder="e.g. Hangang, a quiet cafe, somewhere near home">
+        </div>
+
+        <button class="btn-primary" id="btn-submit-places" style="margin-top: 20px;">These places</button>
+      </section>
+
+      <!-- SCENE 5: OPTIONAL NOTE -->
+      <section class="scene" id="scene-5">
+        <span class="eyebrow">One last touch</span>
+        <h2 class="headline">Anything you want to say,<br>one line is enough</h2>
+        <p class="subhead">Or leave it blank if you prefer.</p>
+
+        <div class="custom-input-group">
+          <input type="text" class="text-input" id="memo-input" placeholder="e.g. I don’t like huge crowds / walking is good / just dessert" maxlength="140">
+        </div>
+
+        <button class="btn-primary" id="btn-seal-letter" style="margin-top: 24px;">Seal the letter</button>
+      </section>
+
+      <!-- SCENE 6: SEALED LETTER + D-DAY -->
+      <section class="scene" id="scene-6">
+        <div class="letter-summary-card" id="letter-summary-card">
+          <div class="letter-summary-header">
+            <div>
+              <div class="letter-to">Yera noona</div>
+              <div style="font-size: 13px; color: var(--muted); margin-top: 2px;">예라 누나</div>
+            </div>
+            <div class="wax-seal" style="position: relative; top: 0; left: 0; transform: none; width: 44px; height: 44px; font-size: 14px;" id="summary-wax-seal">
+              YN
+            </div>
+          </div>
+
+          <div class="summary-section">
+            <div class="summary-title">Availability</div>
+            <div class="summary-content" id="summary-availability">
+              No promise or family meeting on Christmas Eve or Christmas.
+            </div>
+          </div>
+
+          <div class="summary-section">
+            <div class="summary-title">Invitation</div>
+            <div class="summary-content" id="summary-hangout">
+              You said yes to hanging out.
+            </div>
+          </div>
+
+          <div class="summary-section">
+            <div class="summary-title">Time</div>
+            <div class="summary-content" id="summary-times">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <div class="summary-section">
+            <div class="summary-title">Place</div>
+            <div class="summary-content" id="summary-places">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <div class="summary-section" id="summary-memo-section">
+            <div class="summary-title">Note</div>
+            <div class="summary-content" id="summary-memo">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Live D-Day Counter Module -->
+        <div class="dday-card" id="main-dday-card">
+          <div class="eyebrow" style="color: var(--gold-soft); font-size: 11px;">COUNTDOWN TO CHRISTMAS</div>
+          <div class="dday-main" id="dday-big">Christmas<br>D-115</div>
+          <div class="dday-timer" id="dday-ticking">00 days 00 hrs 00 min 00 sec</div>
+          <div class="dday-monday-line" id="dday-monday-count">16 Mondays left until Christmas.</div>
+          <div class="dday-weekday-note">Eve is Thursday · Christmas is Friday</div>
+          <div class="mini-slot-countdown" id="mini-slot-countdown" style="display: none;"></div>
+          <button class="dday-toggle-btn" id="dday-toggle-target">Count down to Eve instead</button>
+        </div>
+
+        <!-- Actions -->
+        <button class="btn-secondary" id="btn-edit-answers">Look at the letter again</button>
+        <button class="btn-primary" id="btn-save-image">Save as image</button>
+        <p class="footer-text" style="margin-top: 8px;" id="ios-screenshot-hint">Or just screenshot this page</p>
+
+        <p class="footer-text" style="margin-top: 20px;">This letter is only for Yera noona.</p>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast Element -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Landscape Warning -->
+  <div class="landscape-warning">
+    <div style="font-size: 32px; margin-bottom: 12px;">📱</div>
+    <h2>Turn the phone up</h2>
+    <p style="margin-top: 8px; font-size: 14px; opacity: 0.8;">This Christmas letter is best read in portrait mode.</p>
+  </div>
+
+  <script src="snow.js"></script>
+  <script src="audio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
