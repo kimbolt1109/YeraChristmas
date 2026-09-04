@@ -779,33 +779,29 @@ const ddayEl = addOverlay({
     <div class="eve-switch"><span id="eve-switch-label">Count down to Eve instead</span>
       <span class="brass-switch" id="eve-switch" role="switch" tabindex="0" aria-checked="false"><span class="knob"></span></span>
     </div>
+    <div class="hr" style="margin:0.6rem 0 0.4rem"></div>
+    <div class="letter-h" style="font-family:var(--serif);font-size:1.15rem;color:#241b12;margin-bottom:0.3rem;text-align:center">
+      For Yera noona <span lang="ko" style="font-size:0.85em;color:#96703c">예라 누나</span>
+    </div>
+    <div id="letter-body" style="text-align:left;font-size:0.80rem;line-height:1.5"></div>
+    <div class="wax-dot" style="margin:0.5rem auto 0.3rem"></div>
+    <div id="letter-actions" style="display:flex;gap:0.4rem;justify-content:center;margin-top:0.4rem">
+      <button class="btn" id="letter-save" type="button" style="min-height:40px;font-size:0.80rem;padding:0.35rem 0.85rem">Save as image</button>
+    </div>
+    <div class="small" style="text-align:center;margin-top:0.3rem;font-size:0.66rem;color:var(--muted)">Or screenshot this page</div>
   </div>`,
   anchor: null, stop: 'tree', pin: { start: 0.93, end: 1.02 }, clampTo: 'none',
 });
 ddayEl.style.left = '50%';
-ddayEl.style.top = `calc(${Math.max(16, safeTop())}px + 2.6rem)`;
+ddayEl.style.top = `calc(${Math.max(12, safeTop())}px + 0.5rem)`;
 ddayEl.style.transform = 'translateX(-50%)';
 ddayEl.style.transformOrigin = '50% 0%';
-const letterEl = addOverlay({
-  html: `<div class="card" id="letter-card">
-    <div class="letter-h">For Yera noona <span lang="ko" style="font-size:0.8em;color:#96703c">예라 누나</span></div>
-    <div id="letter-body"></div>
-    <div class="wax-dot"></div>
-    <div id="letter-actions">
-      <button class="btn ghost" id="letter-again" type="button" style="min-height:46px;font-size:0.82rem">Look at the letter again</button>
-      <button class="btn" id="letter-save" type="button" style="min-height:46px;font-size:0.82rem">Save as image</button>
-    </div>
-    <div class="small" style="text-align:center;margin-top:0.5rem">Or just screenshot this page</div>
-  </div>`,
-  anchor: null, stop: 'tree', pin: { start: 0.93, end: 1.02 }, clampTo: 'none',
+ddayEl.style.maxHeight = `calc(100vh - ${Math.max(12, safeTop()) + 40}px)`;
+ddayEl.style.overflowY = 'auto';
+
+ddayEl.addEventListener('click', (e) => {
+  if (e.target.id === 'letter-save') saveLetterImage();
 });
-letterEl.style.left = '50%';
-letterEl.style.top = 'auto';
-letterEl.style.bottom = `calc(${Math.max(18, safeBottom())}px + 3.6rem)`;
-letterEl.style.transform = 'translateX(-50%)';
-letterEl.style.transformOrigin = '50% 100%';
-letterEl.style.maxHeight = '34vh';
-letterEl.style.overflow = 'auto';
 const treeFooter = addOverlay({
   html: `<div id="tree-footer">This letter is only for Yera noona.</div>`,
   anchor: null, stop: 'tree', pin: { start: 0.93, end: 1.02 }, interactive: false, clampTo: 'none',
@@ -943,27 +939,23 @@ eveSwitch.addEventListener('click', toggleEve);
 // ————— the letter summary —————
 function letterBodyHTML() {
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  if (state.hangout === 'no') {
-    return `<p>You even caught the one that runs away.</p>
-      <p style="margin-top:0.4rem">If we don’t go, have a quiet, pretty Christmas anyway.</p>
-      ${state.memo ? `<div class="letter-sec"><b>On the bench</b>${esc(state.memo)}</div>` : ''}`;
-  }
-  if (state.availability === 'busy') {
-    return `<p>A promise or a family meeting comes first on Christmas Eve or Christmas — as it should.</p>
-      <p style="margin-top:0.4rem">The village keeps its snow for you.</p>
-      <div class="letter-sec"><b>If another day works</b>${state.memo ? esc(state.memo) : '—'}</div>`;
-  }
-  const availLine = state.availability === 'unsure'
-    ? 'You’re not sure yet — the days are still open.'
-    : 'No promise or family meeting on Christmas Eve or Christmas.';
-  const yesLine = state.hangout === 'yes' ? 'You said yes to hanging out.' : 'The stall is still waiting for an answer.';
+
+  const availLine = state.availability === 'busy'
+    ? 'A promise or family meeting comes first on Christmas Eve or Christmas.'
+    : (state.availability === 'unsure' ? 'You’re not sure yet — the days are still open.' : 'No promise or family meeting on Christmas Eve or Christmas.');
+
+  const yesLine = state.hangout === 'no'
+    ? 'Caught the ornament that runs away.'
+    : (state.hangout === 'yes' ? 'You said yes to hanging out.' : 'The stall is still waiting for an answer.');
+
   const times = SLOTS.filter((s) => state.times.includes(s.id)).map((s) => `· ${s.title}`).join('<br>') || '· (none picked yet)';
   const places = PLACES.filter((p) => state.places.includes(p.id))
-    .map((p) => `· ${p.name}<br>&nbsp;&nbsp;<span lang="ko" style="color:#96703c">${p.hangul}</span>`).join('<br>');
+    .map((p) => `· ${p.name} <span lang="ko" style="color:#96703c">(${p.hangul})</span>`).join('<br>');
   const custom = state.customPlace ? `${places ? '<br>' : ''}· ${esc(state.customPlace)}` : '';
   const placeBlock = (places || custom) ? `${places}${custom}` : '· (none picked yet)';
+
   return `<p>${availLine}</p>
-    <p style="margin-top:0.4rem">${yesLine}</p>
+    <p style="margin-top:0.3rem">${yesLine}</p>
     <div class="letter-sec"><b>Time</b>${times}</div>
     <div class="letter-sec"><b>Place</b>${placeBlock}</div>
     <div class="letter-sec"><b>Note</b>${state.memo ? esc(state.memo) : 'None'}</div>`;
@@ -1104,6 +1096,7 @@ function startWalk() {
     rig.scrollToT(Math.min(state.cameraT, rig.maxT()), { instant: true });
   }
 }
+window.startWalk = startWalk;
 document.getElementById('walk-in').addEventListener('click', startWalk);
 intro.addEventListener('click', (e) => { if (e.target === intro || e.target.closest('.intro-inner')) startWalk(); });
 
