@@ -80,6 +80,9 @@ export class ScrollRig {
     let ticking = false;
     const onScroll = () => {
       if (!this.enabled) { window.scrollTo(0, 0); return; }
+      // our own scripted scrolls must not cancel themselves
+      if (this._scripted) { this._idleAt = performance.now(); return; }
+      this._restDisallowed = false; // she is driving again; snap may return
       const maxT = this.maxT();
       const maxPx = this.pxForT(maxT);
       if (window.scrollY > maxPx + 2) {
@@ -148,13 +151,18 @@ export class ScrollRig {
     }
     const k = 1 - Math.exp(-dt * (this.reduced ? 2.2 : 3.4));
     const prev = this.currentT;
-    this.currentT += (goal - this.currentT) * k;
+    if (this._instant) {
+      this.currentT = goal;
+      this._instant = false;
+    } else {
+      this.currentT += (goal - this.currentT) * k;
+    }
     if (Math.abs(goal - this.currentT) < 0.00004) this.currentT = goal;
     this.vel = dt > 0 ? (this.currentT - prev) / dt : 0;
 
     // magnetic rest at a nearby stop after she stops scrolling
     const idleMs = performance.now() - this._idleAt;
-    if (!this._auto && idleMs > 1600 && idleMs < 4000) {
+    if (!this._auto && !this._restDisallowed && idleMs > 1600 && idleMs < 4000) {
       let nearest = null, best = 0.016;
       for (const s of this.stops) {
         if (s.hidden) continue;
@@ -170,20 +178,22 @@ export class ScrollRig {
     // parallax easing
     const gx = clamp((this._gyro || 0) * 0.8 + this.parallax.x * 0.35, -1, 1);
     this._px.x += (gx - this._px.x) * (1 - Math.exp(-dt * 4));
-    this._px.y += (this.parallax.y * 0.3 - this._px.y) * (1 - Math.exp(-dt * 4));
+    this._px.y += (this.parallax.y - this._px.y) * (1 - Math.exp(-dt * 4));
 
-    return {
-      t: this.currentT,
-      rawT: this.rawT,
-      vel: this.vel,
-      idle: (performance.now() - this._idleAt) / 1000,
-    };
+    return { t: this.currentT, rawT: this.rawT, vel: this.vel, idle: idleMs / 1000 };
   }
 
   scrollToT(t, { instant = false } = {}) {
-    const px = this.pxForT(clamp(t, 0, this.maxT()));
-    if (instant) window.scrollTo(0, px);
-    else window.scrollTo({ top: px, behavior: 'smooth' });
+    const target = clamp(t, 0, this.maxT());
+    const px = this.pxForT(target);
+    this.rawT = target;
+    if (instant) {
+      this.currentT = target;
+      this._instant = true;
+      window.scrollTo(0, px);
+    } else {
+      window.scrollTo({ top: px, behavior: 'smooth' });
+    }
   }
 
   // the forward ease when a lock releases
@@ -196,18 +206,21 @@ export class ScrollRig {
     const startY = window.scrollY;
     const t0 = performance.now();
     const dur = 900;
-    let last = startY;
+    this._scripted = true;
+    this._restDisallowed = true; // the forward ease decides where she rests
     const step = (now) => {
       const s = clamp((now - t0) / dur, 0, 1);
       const y = startY + (goalPx - startY) * easeInOutCubic(s);
       window.scrollTo(0, y);
-      last = y;
       if (s < 1) this._auto = requestAnimationFrame(step);
-      else this._auto = null;
+      else { this._auto = null; setTimeout(() => { this._scripted = false; }, 60); }
     };
     this._auto = requestAnimationFrame(step);
   }
-  cancelAuto() { if (this._auto) { cancelAnimationFrame(this._auto); this._auto = null; } }
+  cancelAuto() {
+    if (this._auto) { cancelAnimationFrame(this._auto); this._auto = null; }
+    this._scripted = false;
+  }
 
   // ————— progress dots —————
   _buildDots() {

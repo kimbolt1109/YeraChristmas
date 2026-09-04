@@ -7,8 +7,8 @@ import * as THREE from './vendor/three.module.min.js';
 // ————— palette —————
 const C = {
   night: 0x070b14,
-  snowFresh: 0xf4f1e8,
-  snowPack: 0xc9d2e2,
+  snowFresh: 0xdfe2e0,
+  snowPack: 0xaab6cc,
   woodDark: 0x33241a,
   woodMid: 0x4a3524,
   woodWarm: 0x5b422c,
@@ -112,13 +112,13 @@ export const ANCHORS = {
     new THREE.Vector3(1.7, 1.95, -59.5),
   ],
   globes: [
-    new THREE.Vector3(-1.35, 2.25, -70.5),
-    new THREE.Vector3(1.3, 2.75, -72.2),
-    new THREE.Vector3(-1.2, 2.2, -73.9),
-    new THREE.Vector3(1.35, 2.7, -75.6),
-    new THREE.Vector3(-1.3, 2.25, -77.3),
-    new THREE.Vector3(1.25, 2.8, -79.0),
-    new THREE.Vector3(-1.2, 2.25, -80.7),
+    new THREE.Vector3(-1.65, 2.25, -70.2),
+    new THREE.Vector3(1.65, 2.65, -72.1),
+    new THREE.Vector3(-1.65, 2.2, -74.0),
+    new THREE.Vector3(1.65, 2.6, -75.9),
+    new THREE.Vector3(-1.65, 2.25, -77.8),
+    new THREE.Vector3(1.65, 2.65, -79.7),
+    new THREE.Vector3(-1.65, 2.25, -81.6),
   ],
   deskNote: new THREE.Vector3(0.55, 1.3, -86.3),
   treeCard: new THREE.Vector3(0, 7.0, -105.6),
@@ -136,27 +136,27 @@ export function createVillage(preset, photoUrls) {
   const props = { interactive: [] };
 
   // ————— lights —————
-  const hemi = new THREE.HemisphereLight(0x5a6a90, 0x241a12, 1.05);
+  const hemi = new THREE.HemisphereLight(0x5a6a90, 0x1c1610, 0.6);
   scene.add(hemi);
-  const moon = new THREE.DirectionalLight(0x9fb3d4, 0.62);
+  const moon = new THREE.DirectionalLight(0x9fb3d4, 0.5);
   moon.position.set(-30, 44, -8);
   scene.add(moon);
-  const pathFill = new THREE.DirectionalLight(0xffd9b8, 0.28);
+  const pathFill = new THREE.DirectionalLight(0xffd9b8, 0.22);
   pathFill.position.set(6, 14, 10);
   scene.add(pathFill);
 
   const addPoint = (color, intensity, dist, pos) => {
-    const l = new THREE.PointLight(color, intensity, dist, 1.6);
+    const l = new THREE.PointLight(color, intensity, dist, 1.8);
     l.position.copy(pos);
     scene.add(l);
     return l;
   };
-  const gateLight = addPoint(0xffb066, 24, 24, new THREE.Vector3(0.85, 2.7, 3.0));
-  const stallLight = addPoint(0xff9a4d, 20, 18, new THREE.Vector3(1.3, 2.7, -44.6));
-  const treeLight = addPoint(0xffd28f, 30, 30, new THREE.Vector3(0, 5.0, -105.4));
-  const candleLight = addPoint(0xff9a4d, 5.5, 8, new THREE.Vector3(0.95, 1.45, -86.1));
-  addPoint(0xffc37a, 10, 18, new THREE.Vector3(0, 3.2, -11));
-  addPoint(0xffb066, 12, 18, new THREE.Vector3(0, 3.0, -31));
+  const gateLight = addPoint(0xffb066, 6, 20, new THREE.Vector3(0.85, 2.7, 3.0));
+  const stallLight = addPoint(0xff9a4d, 5, 16, new THREE.Vector3(1.3, 2.7, -44.6));
+  const treeLight = addPoint(0xffd28f, 8, 26, new THREE.Vector3(0, 5.0, -105.4));
+  const candleLight = addPoint(0xff9a4d, 1.8, 7, new THREE.Vector3(0.95, 1.45, -86.1));
+  addPoint(0xffc37a, 3, 16, new THREE.Vector3(0, 3.2, -11));
+  addPoint(0xffb066, 3.5, 16, new THREE.Vector3(0, 3.0, -31));
   props.flickerLights = [gateLight, stallLight, treeLight, candleLight];
   props.stallLight = stallLight;
 
@@ -691,8 +691,20 @@ export function createVillage(preset, photoUrls) {
         new THREE.MeshPhongMaterial({ color: 0x8fa8cc, transparent: true, opacity: 0.16, shininess: 90, specular: 0x99aabb, depthWrite: false })
       );
       g.add(glass);
-      const photoTex = new THREE.TextureLoader().load(url);
-      photoTex.colorSpace = THREE.SRGBColorSpace;
+      const photoTex = new THREE.TextureLoader().load(url, (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const img = tex.image;
+        if (img && img.width && img.height) {
+          const aspect = img.width / img.height;
+          if (aspect > 1) {
+            tex.repeat.set(1 / aspect, 1);
+            tex.offset.set((1 - 1 / aspect) / 2, 0);
+          } else {
+            tex.repeat.set(1, aspect);
+            tex.offset.set(0, (1 - aspect) / 2);
+          }
+        }
+      });
       // the camera walks down -z, so the photo's +z face looks back up the path
       const photo = new THREE.Mesh(new THREE.CircleGeometry(0.4, 24), new THREE.MeshBasicMaterial({ map: photoTex, toneMapped: false }));
       photo.position.z = 0.06;

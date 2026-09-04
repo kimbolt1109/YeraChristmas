@@ -28,6 +28,10 @@ let state = loadState();
 
 function loadState() {
   try {
+    // ?fresh=1 starts a blank village (handy for testing / re-gifting the link)
+    if (new URLSearchParams(location.search).has('fresh')) {
+      localStorage.removeItem(STORAGE_KEY);
+    }
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...defaultState, times: [], places: [] };
     const s = JSON.parse(raw);
@@ -95,6 +99,7 @@ const rig = new ScrollRig({
   chevronEl: document.getElementById('chevron'),
   reduced,
 });
+window.rig = rig;
 if (state.letterOpened) rig.answer('gate');
 if (state.availability) rig.answer('cottages');
 if (state.hangout) rig.answer('stall');
@@ -114,16 +119,19 @@ if (reduced) {
 const overlaysEl = document.getElementById('overlays');
 const registry = [];
 
-function addOverlay({ html, cls = '', anchor, stop, win = 0.05, pin = null, clampTo = 'card', interactive = true }) {
+function addOverlay({ html, cls = '', anchor, stop, stopT = null, win = 0.05, pin = null, clampTo = 'card', interactive = true, minDist = 0 }) {
   const el = document.createElement('div');
   el.className = cls;
   el.innerHTML = html;
   el.style.position = 'absolute';
   el.style.left = '0';
   el.style.top = '0';
+  el.style.width = '0';
+  el.style.height = '0';
   el.style.pointerEvents = 'none';
   overlaysEl.appendChild(el);
-  const item = { el, anchor, stopT: stop != null ? STOPS.find((s) => s.id === stop).t : 0, win, pin, clampTo, interactive, visibleFlag: true, userScale: 1 };
+  const targetStopT = stopT != null ? stopT : (stop != null ? STOPS.find((s) => s.id === stop).t : 0);
+  const item = { el, anchor, stopT: targetStopT, win, pin, clampTo, interactive, minDist, visibleFlag: true, userScale: 1 };
   registry.push(item);
   return el;
 }
@@ -173,18 +181,24 @@ function frameOverlays(t) {
     const p = projectToScreen(item.anchor);
     if (p.z > 1) { hideEl(el); continue; } // behind the camera
     let x = p.x, y = p.y;
+    const box = el.querySelector('.card') || el.firstElementChild || el;
     if (item.clampTo === 'card') {
-      const w = el.offsetWidth || 300, h = el.offsetHeight || 200;
-      const marginX = Math.min(vw * 0.06 + 8, 40) + w / 2;
-      x = Math.min(Math.max(x, marginX), vw - marginX);
-      const topLim = safeTop() + 74 + h / 2;
-      const botLim = vvH - safeBottom() - (h / 2 + 96);
-      y = Math.min(Math.max(y, Math.min(topLim, botLim)), Math.max(topLim, botLim));
+      const w = box.offsetWidth || 300, h = box.offsetHeight || 200;
+      // keep the card fully on-screen; center it if it's too wide to fit
+      const padL = 12, padR = 40; // right edge leaves room for the dots column
+      const minX = w / 2 + padL, maxX = vw - w / 2 - padR;
+      x = maxX <= minX ? vw / 2 : Math.min(Math.max(x, minX), maxX);
+      const topLim = safeTop() + 16 + h / 2;
+      const botLim = vvH - safeBottom() - (h / 2 + 80);
+      if (botLim <= topLim) y = vvH / 2; // card taller than the stage: center
+      else y = Math.min(Math.max(y, topLim), botLim);
     } else {
-      x = Math.min(Math.max(x, 44), vw - 44);
-      y = Math.min(Math.max(y, safeTop() + 60), vvH - 70);
+      const w = box.offsetWidth || 60, h = box.offsetHeight || 60;
+      x = Math.min(Math.max(x, w / 2 + 6), vw - w / 2 - 12);
+      y = Math.min(Math.max(y, safeTop() + 60 + h / 2), vvH - 40 - h / 2);
     }
-    el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%,-50%) scale(${(0.86 + 0.14 * o).toFixed(3)})`;
+    if (item.minDist && camera.position.distanceTo(item.anchor) < item.minDist) { hideEl(el); continue; }
+    el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${(0.86 + 0.14 * o).toFixed(3)})`;
     el.style.opacity = o.toFixed(3);
     el.style.pointerEvents = o > 0.5 && item.interactive ? 'auto' : 'none';
   }
@@ -275,7 +289,7 @@ const envelopeBtn = addOverlay({
 const gateCaption = addOverlay({
   html: `<div class="card" id="gate-caption" style="min-width:12.5rem;text-align:center">
     <p id="gate-caption-text">A Christmas letter<br>you haven’t opened yet</p></div>`,
-  anchor: ANCHORS.envelope.clone().add(new THREE.Vector3(0, -0.72, 0)),
+  anchor: ANCHORS.envelope.clone().add(new THREE.Vector3(0, -1.5, 0)),
   stop: 'gate', win: 0.06, clampTo: 'card', interactive: false,
 });
 
@@ -324,7 +338,7 @@ const cottageCard = addOverlay({
     <div class="eyebrow">One thing first</div>
     <h2>Do you already have a promise or a family meeting on Christmas Eve or Christmas?</h2>
     <p>Thursday the 24th and Friday the 25th. If you do, that comes first.</p></div>`,
-  anchor: new THREE.Vector3(0, 3.05, -29.6), stop: 'cottages', win: 0.05,
+  anchor: new THREE.Vector3(0, 3.45, -29.6), stop: 'cottages', win: 0.055,
 });
 function doorHTML(title, sub) {
   return `<button class="door-btn" type="button">
@@ -542,7 +556,7 @@ function realNoEnding() {
   audio.chime(392, 0.06);
   noBtn.classList.add('real');
   noLabel.textContent = 'No, I really can’t';
-  props.stallLight.intensity = 5;
+  props.stallLight.intensity = 1.6;
   document.getElementById('stall-h').textContent = 'Okay. You even caught the one that runs away.';
   document.getElementById('stall-p').textContent = 'If we don’t go, have a quiet, pretty Christmas anyway.';
   rig.unlockAll();
@@ -568,8 +582,7 @@ clocksCard.style.transformOrigin = '50% 0%';
 const watchEls = SLOTS.map((slot, i) => addOverlay({
   html: `<button class="watch-btn" type="button" data-id="${slot.id}">
     <span class="watch-face">${slot.title}</span>
-    <span class="watch-time">${slot.when}</span>
-    <span class="watch-note">${slot.note}</span></button>`,
+    <span class="watch-info"><span class="watch-time">${slot.when}</span><span class="watch-note">${slot.note}</span></span></button>`,
   anchor: ANCHORS.watches[i], stop: 'clocks', win: 0.045, clampTo: 'none',
 }));
 function refreshWatchVisuals() {
@@ -607,40 +620,40 @@ clocksCard.addEventListener('click', (e) => {
 
 // ————— Scene 4 · the gallery of places —————
 const galleryCard = addOverlay({
-  html: `<div class="card" style="width:min(21rem,88vw)">
-    <div class="eyebrow">Where we could walk</div>
-    <h2>Which places sound good?</h2>
-    <p>Look at the pictures inside the globes. Pick the ones you like.</p>
-    <div id="chips" style="margin-top:0.6rem">
+  html: `<div class="card gallery-compact" style="width:min(20rem,88vw)">
+    <div class="eyebrow" style="margin-bottom:0.25rem">Where we could walk</div>
+    <h2 style="font-size:1.05rem;margin-bottom:0.2rem">Which places sound good?</h2>
+    <p style="font-size:0.72rem">Look inside the globes. Pick the ones you like.</p>
+    <div id="chips" style="margin-top:0.4rem">
       <button class="chip on" data-f="all" type="button">All</button>
       <button class="chip" data-f="indoor" type="button">Indoor</button>
       <button class="chip" data-f="outdoor" type="button">Outdoor</button>
       <button class="chip" data-f="less" type="button">Less crowded</button>
     </div>
-    <input type="text" id="custom-place" placeholder="Somewhere else? Hangang, a quiet cafe…" maxlength="80" style="margin-top:0.6rem">
-    <div style="display:flex;justify-content:center;margin-top:0.7rem">
-      <button class="btn" id="places-cta" type="button">These places</button>
+    <input type="text" id="custom-place" placeholder="Somewhere else? Hangang, a quiet cafe…" maxlength="80" style="margin-top:0.45rem;padding:0.45rem 0.6rem">
+    <div style="display:flex;justify-content:center;margin-top:0.5rem">
+      <button class="btn" id="places-cta" type="button" style="min-height:46px;padding:0.6rem 1.2rem">These places</button>
     </div>
   </div>`,
   anchor: null, stop: 'gallery', pin: { start: 0.70, end: 0.845 }, clampTo: 'none',
 });
 galleryCard.style.position = 'absolute';
 galleryCard.style.left = '50%';
-galleryCard.style.top = `calc(${Math.max(20, safeTop())}px + 3.4rem)`;
-galleryCard.style.transform = 'translateX(-50%)';
+galleryCard.style.top = `calc(${Math.max(12, safeTop())}px + 0.8rem)`;
+galleryCard.style.transform = 'none';
 galleryCard.style.transformOrigin = '50% 0%';
 
 const globeEls = PLACES.map((pl, i) => addOverlay({
   html: `<button class="globe-btn" type="button" data-id="${pl.id}">
     <span class="globe-photo"><img src="${pl.photo}" alt="${pl.name}" loading="lazy" draggable="false"></span>
     <span class="globe-name">${pl.name}<span class="globe-hangul" lang="ko">${pl.hangul}</span></span></button>`,
-  anchor: ANCHORS.globes[i], stop: 'gallery', win: 0.055, clampTo: 'none',
+  anchor: ANCHORS.globes[i], stopT: 0.735 + i * 0.015, win: 0.028, clampTo: 'none', minDist: 3.2,
 }));
 const customGlobeEl = addOverlay({
   html: `<button class="globe-btn custom" type="button" data-id="custom">
     <span class="globe-photo">+</span>
     <span class="globe-name">Somewhere else</span></button>`,
-  anchor: new THREE.Vector3(1.2, 2.35, -82), stop: 'gallery', win: 0.09, clampTo: 'none',
+  anchor: new THREE.Vector3(1.65, 2.45, -83.5), stopT: 0.84, win: 0.028, clampTo: 'none', minDist: 3.2,
 });
 
 function refreshGlobeVisuals() {
@@ -775,6 +788,7 @@ const starEl = addOverlay({
   anchor: ANCHORS.star, stop: 'tree', win: 0.05, clampTo: 'none',
 });
 let starTaps = 0;
+let resetting = false;
 starEl.addEventListener('click', () => {
   starTaps++;
   audio.chime(1568 + starTaps * 40, 0.05);
@@ -783,8 +797,8 @@ starEl.addEventListener('click', () => {
   label.style.color = starTaps >= 3 ? 'rgba(240,228,200,0.75)' : 'rgba(240,228,200,0)';
   label.textContent = starTaps >= 3 ? `${8 - starTaps} more taps unties the letter` : '';
   if (starTaps >= 8) {
+    resetting = true; // pagehide must not write the answers back
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
-    window.removeEventListener('pagehide', saveCamera);
     location.reload();
   }
 });
@@ -876,7 +890,7 @@ function tickDday() {
     const to = best.ms - nowMs;
     const d2 = Math.floor(to / 86400000), h2 = Math.floor((to % 86400000) / 3600000), m2 = Math.floor((to % 3600000) / 60000);
     slotEl.hidden = false;
-    slotEl.textContent = `Around ${best.s.title.toLowerCase()} · ${best.s.around} — in ${d2}d ${h2}h ${m2}m`;
+    slotEl.textContent = `Around ${best.s.title} · ${best.s.around} — in ${d2}d ${h2}h ${m2}m`;
   } else {
     slotEl.hidden = true;
   }
@@ -1084,6 +1098,7 @@ if (window.visualViewport) window.visualViewport.addEventListener('resize', onRe
 
 // ————— camera save —————
 function saveCamera() {
+  if (resetting) return; // the letter was untied; leave storage blank
   state.cameraT = rig.t;
   saveState();
 }
