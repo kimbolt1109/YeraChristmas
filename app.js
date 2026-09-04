@@ -357,9 +357,10 @@ const busyBench = addOverlay({
     <div class="hr"></div>
     <p style="margin-bottom:0.5rem">If another day works, leave a line on the bench.</p>
     <input type="text" id="busy-note" placeholder="Another day works / I probably can’t / …" maxlength="120">
-    <div style="display:flex;gap:0.5rem;justify-content:center;margin-top:0.7rem">
-      <button class="btn" id="busy-save" type="button" style="min-height:48px;font-size:0.9rem">Save the note</button>
-      <button class="btn ghost" id="busy-skip" type="button" style="min-height:48px;font-size:0.9rem">Just watch the snow</button>
+    <div style="display:flex;flex-wrap:wrap;gap:0.4rem;justify-content:center;margin-top:0.7rem">
+      <button class="btn" id="busy-save" type="button" style="min-height:44px;font-size:0.82rem;padding:0.4rem 0.8rem">Save note</button>
+      <button class="btn ghost" id="busy-change-free" type="button" style="min-height:44px;font-size:0.82rem;padding:0.4rem 0.8rem;border-color:var(--gold-soft);color:var(--gold-soft)">Wait, I’m free after all!</button>
+      <button class="btn ghost" id="busy-skip" type="button" style="min-height:44px;font-size:0.82rem;padding:0.4rem 0.8rem">Watch snow</button>
     </div></div>`,
   anchor: ANCHORS.benchBusy, stop: 'cottages', win: 0.06,
 });
@@ -367,38 +368,68 @@ busyBench.style.display = busyMode ? '' : 'none';
 if (!busyMode) busyBench.style.pointerEvents = 'none';
 
 function applyDoorVisual(side) {
+  const btnL = doorLEl.querySelector('.door-btn');
+  const btnR = doorREl.querySelector('.door-btn');
+  const btnU = unsureEl.querySelector('#unsure-plaque');
+  btnL.classList.remove('chosen', 'dimmed');
+  btnR.classList.remove('chosen', 'dimmed');
+  btnU.classList.remove('chosen');
   if (side === 'left') {
-    doorLEl.querySelector('.door-btn').classList.add('chosen');
-    doorREl.querySelector('.door-btn').classList.add('dimmed');
+    btnL.classList.add('chosen');
+    btnR.classList.add('dimmed');
   } else if (side === 'right') {
-    doorREl.querySelector('.door-btn').classList.add('chosen');
-    doorLEl.querySelector('.door-btn').classList.add('dimmed');
+    btnR.classList.add('chosen');
+    btnL.classList.add('dimmed');
+  } else if (side === 'unsure') {
+    btnU.classList.add('chosen');
+    btnL.classList.add('dimmed');
+    btnR.classList.add('dimmed');
   }
 }
 if (state.availability === 'free') applyDoorVisual('left');
 if (state.availability === 'busy') applyDoorVisual('right');
+if (state.availability === 'unsure') applyDoorVisual('unsure');
 
 function chooseDoor(side) {
   audio.creak();
-  const pivot = props.doors[side === 'left' ? 'left' : 'right'].doorPivot;
-  tween((s) => { pivot.rotation.y = (side === 'left' ? -1 : 1) * 1.7 * easeOut(s); }, 800);
+  const pivotL = props.doors.left.doorPivot;
+  const pivotR = props.doors.right.doorPivot;
+
+  if (side === 'left') {
+    tween((s) => { pivotL.rotation.y = -1.7 * easeOut(s); }, 600);
+    tween((s) => { pivotR.rotation.y = 1.7 * (1 - easeOut(s)); }, 400);
+    if (props.benchBusy) props.benchBusy.visible = false;
+    busyBench.style.display = 'none';
+    busyBench.style.pointerEvents = 'none';
+    state.availability = 'free';
+    toast('Selected: No, I’m free!');
+  } else {
+    tween((s) => { pivotR.rotation.y = 1.7 * easeOut(s); }, 600);
+    tween((s) => { pivotL.rotation.y = -1.7 * (1 - easeOut(s)); }, 400);
+    if (props.benchBusy) props.benchBusy.visible = true;
+    busyBench.style.display = '';
+    busyBench.style.pointerEvents = 'auto';
+    state.availability = 'busy';
+    rig.unlockAll();
+    toast('Selected: Yes, I’m busy.');
+  }
+
   applyDoorVisual(side);
-  state.availability = side === 'left' ? 'free' : 'busy';
   saveState();
   rig.answer('cottages');
-  if (side === 'right') {
-    rig.unlockAll();
-    props.benchBusy.visible = true;
-    busyBench.style.display = '';
-    toast('The warm cottage dims — the tree is still ahead.');
-  }
   setTimeout(() => rig.autoAdvance(STOPS[3].t), 750);
 }
 doorLEl.addEventListener('click', () => chooseDoor('left'));
 doorREl.addEventListener('click', () => chooseDoor('right'));
 unsureEl.addEventListener('click', () => {
   audio.chime(880, 0.05);
+  props.doors.left.doorPivot.rotation.y = 0;
+  props.doors.right.doorPivot.rotation.y = 0;
+  if (props.benchBusy) props.benchBusy.visible = false;
+  busyBench.style.display = 'none';
+  busyBench.style.pointerEvents = 'none';
   state.availability = 'unsure';
+  applyDoorVisual('unsure');
   saveState();
   rig.answer('cottages');
   unsureEl.querySelector('#unsure-plaque').textContent = 'The days are still open, then.';
@@ -413,6 +444,7 @@ function saveBenchNote() {
 }
 busyBench.addEventListener('click', (e) => {
   if (e.target.id === 'busy-save') saveBenchNote();
+  if (e.target.id === 'busy-change-free') chooseDoor('left');
   if (e.target.id === 'busy-skip') { saveState(); setTimeout(() => rig.autoAdvance(STOPS[3].t), 300); }
 });
 
