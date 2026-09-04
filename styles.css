@@ -56,6 +56,11 @@ body.pre-walk #hud {
   pointer-events: none;
   visibility: hidden;
 }
+body.pre-walk #overlays > div:not(#intro) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
 
 /* total scroll length of the walk */
 #walk-space { height: 1150vh; pointer-events: none; }

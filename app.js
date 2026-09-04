@@ -128,6 +128,7 @@ function addOverlay({ html, cls = '', anchor, stop, stopT = null, win = 0.05, pi
   el.style.top = '0';
   el.style.width = '0';
   el.style.height = '0';
+  el.style.opacity = '0';
   el.style.pointerEvents = 'none';
   overlaysEl.appendChild(el);
   const targetStopT = stopT != null ? stopT : (stop != null ? STOPS.find((s) => s.id === stop).t : 0);
