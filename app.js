@@ -128,6 +128,7 @@ function addOverlay({ html, cls = '', anchor, stop, stopT = null, win = 0.05, pi
   el.style.top = '0';
   el.style.width = '0';
   el.style.height = '0';
+  el.style.display = 'none';
   el.style.opacity = '0';
   el.style.pointerEvents = 'none';
   overlaysEl.appendChild(el);
@@ -155,6 +156,7 @@ function windowOpacity(t, stopT, win) {
 }
 
 function hideEl(el) {
+  el.style.display = 'none';
   el.style.opacity = '0';
   el.style.pointerEvents = 'none';
 }
@@ -174,6 +176,7 @@ function frameOverlays(t) {
       o = windowOpacity(t, item.stopT, item.win);
     }
     if (o <= 0.015) { hideEl(el); continue; }
+    el.style.display = '';
     if (item.pin) {
       el.style.opacity = String(o);
       el.style.pointerEvents = o > 0.5 && item.interactive ? 'auto' : 'none';
