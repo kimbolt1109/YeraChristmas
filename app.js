@@ -161,12 +161,22 @@ function hideEl(el) {
   el.style.pointerEvents = 'none';
 }
 
+// handler-level hide/show that the frame loop respects
+// (the loop re-shows windowed overlays every frame, so style.display alone loses)
+function setOverlayDisplay(el, show) {
+  const item = registry.find((r) => r.el === el);
+  if (item) item.displayOff = !show;
+  if (show) { el.style.display = ''; }
+  else { hideEl(el); }
+}
+
 function frameOverlays(t) {
   const vw = window.innerWidth, vh = window.innerHeight;
   const vvH = window.visualViewport ? window.visualViewport.height : vh;
   for (const item of registry) {
     const el = item.el;
-    if (!item.visibleFlag) { hideEl(el); continue; }
+    if (!started) { hideEl(el); continue; }
+    if (!item.visibleFlag || item.displayOff) { hideEl(el); continue; }
     let o;
     if (item.pin) {
       const { start, end } = item.pin;
@@ -323,7 +333,7 @@ envelopeBtn.addEventListener('click', () => {
     snow.burstAt(ANCHORS.envelope, 18, 0.7, 0.9);
     audio.chime(1046, 0.06);
   });
-  envelopeBtn.style.display = 'none';
+  setOverlayDisplay(envelopeBtn, false);
   document.getElementById('gate-caption-text').innerHTML = 'It’s open.<br>Walk in when you’re ready.';
   toast('Sound is nicer · mute it at the top right anytime');
   rig.answer('gate');
@@ -363,13 +373,13 @@ const busyBench = addOverlay({
     <input type="text" id="busy-note" placeholder="Another day works / I probably can’t / …" maxlength="120">
     <div style="display:flex;flex-wrap:wrap;gap:0.4rem;justify-content:center;margin-top:0.7rem">
       <button class="btn" id="busy-save" type="button" style="min-height:44px;font-size:0.82rem;padding:0.4rem 0.8rem">Save note</button>
-      <button class="btn ghost" id="busy-change-free" type="button" style="min-height:44px;font-size:0.82rem;padding:0.4rem 0.8rem;border-color:var(--gold-soft);color:var(--gold-soft)">Wait, I’m free after all!</button>
+      <button class="btn ghost" id="busy-change-free" type="button" style="min-height:44px;font-size:0.82rem;padding:0.4rem 0.8rem;border-color:#927244;color:#4a351f;font-weight:600">Wait, I’m free after all!</button>
       <button class="btn ghost" id="busy-skip" type="button" style="min-height:44px;font-size:0.82rem;padding:0.4rem 0.8rem">Watch snow</button>
     </div></div>`,
   anchor: ANCHORS.benchBusy, stop: 'cottages', win: 0.06,
 });
-busyBench.style.display = busyMode ? '' : 'none';
-if (!busyMode) busyBench.style.pointerEvents = 'none';
+setOverlayDisplay(busyBench, busyMode);
+setOverlayDisplay(cottageCard, !busyMode);
 
 function applyDoorVisual(side) {
   const btnL = doorLEl.querySelector('.door-btn');
@@ -403,16 +413,16 @@ function chooseDoor(side) {
     tween((s) => { pivotL.rotation.y = -1.7 * easeOut(s); }, 600);
     tween((s) => { pivotR.rotation.y = 1.7 * (1 - easeOut(s)); }, 400);
     if (props.benchBusy) props.benchBusy.visible = false;
-    busyBench.style.display = 'none';
-    busyBench.style.pointerEvents = 'none';
+    setOverlayDisplay(busyBench, false);
+    setOverlayDisplay(cottageCard, false);
     state.availability = 'free';
     toast('Selected: No, I’m free!');
   } else {
     tween((s) => { pivotR.rotation.y = 1.7 * easeOut(s); }, 600);
     tween((s) => { pivotL.rotation.y = -1.7 * (1 - easeOut(s)); }, 400);
     if (props.benchBusy) props.benchBusy.visible = true;
-    busyBench.style.display = '';
-    busyBench.style.pointerEvents = 'auto';
+    setOverlayDisplay(busyBench, true);
+    setOverlayDisplay(cottageCard, false);
     state.availability = 'busy';
     rig.unlockAll();
     toast('Selected: Yes, I’m busy.');
@@ -421,7 +431,9 @@ function chooseDoor(side) {
   applyDoorVisual(side);
   saveState();
   rig.answer('cottages');
-  setTimeout(() => rig.autoAdvance(STOPS[3].t), 750);
+  if (side === 'left') {
+    setTimeout(() => rig.autoAdvance(STOPS[3].t), 750);
+  }
 }
 doorLEl.addEventListener('click', () => chooseDoor('left'));
 doorREl.addEventListener('click', () => chooseDoor('right'));
@@ -430,8 +442,8 @@ unsureEl.addEventListener('click', () => {
   props.doors.left.doorPivot.rotation.y = 0;
   props.doors.right.doorPivot.rotation.y = 0;
   if (props.benchBusy) props.benchBusy.visible = false;
-  busyBench.style.display = 'none';
-  busyBench.style.pointerEvents = 'none';
+  setOverlayDisplay(busyBench, false);
+  setOverlayDisplay(cottageCard, true);
   state.availability = 'unsure';
   applyDoorVisual('unsure');
   saveState();
@@ -568,7 +580,8 @@ function chooseYes() {
   saveState();
   const y = projectToScreen(ANCHORS.yesToken);
   burstConfetti(y.x, y.y);
-  noEl.style.display = 'none';
+  noGone = true;
+  setOverlayDisplay(noEl, false);
   props.no3d.visible = false;
   snow.burstAt(ANCHORS.noOrnament, 12, 1.2, 1.0);
   rig.answer('stall');
@@ -797,11 +810,9 @@ const ddayEl = addOverlay({
   anchor: null, stop: 'tree', pin: { start: 0.93, end: 1.02 }, clampTo: 'none',
 });
 ddayEl.style.left = '50%';
-ddayEl.style.top = `calc(${Math.max(12, safeTop())}px + 0.5rem)`;
+ddayEl.style.top = `calc(${Math.max(16, safeTop())}px + 2.8rem)`;
 ddayEl.style.transform = 'translateX(-50%)';
 ddayEl.style.transformOrigin = '50% 0%';
-ddayEl.style.maxHeight = `calc(100vh - ${Math.max(12, safeTop()) + 40}px)`;
-ddayEl.style.overflowY = 'auto';
 
 ddayEl.addEventListener('click', (e) => {
   if (e.target.id === 'letter-save') saveLetterImage();
@@ -834,16 +845,7 @@ starEl.addEventListener('click', () => {
     location.reload();
   }
 });
-letterEl.addEventListener('click', (e) => {
-  if (e.target.id === 'letter-again') {
-    rig.scrollToT(STOPS[9].t);
-    const card = letterEl.querySelector('#letter-card');
-    card.style.transition = 'transform 0.3s ease';
-    card.style.transform += ' scale(1.03)';
-    setTimeout(() => { card.style.transform = card.style.transform.replace(' scale(1.03)', ''); }, 320);
-  }
-  if (e.target.id === 'letter-save') saveLetterImage();
-});
+
 
 // ————— D-day (KST) —————
 // Monday snapshot: on 2026-09-01 KST there are 16 Mondays left
@@ -957,12 +959,13 @@ function letterBodyHTML() {
     .map((p) => `· ${p.name} <span lang="ko" style="color:#96703c">(${p.hangul})</span>`).join('<br>');
   const custom = state.customPlace ? `${places ? '<br>' : ''}· ${esc(state.customPlace)}` : '';
   const placeBlock = (places || custom) ? `${places}${custom}` : '· (none picked yet)';
+  const noteBlock = state.memo ? `· ${esc(state.memo)}` : '· (none)';
 
   return `<p>${availLine}</p>
     <p style="margin-top:0.3rem">${yesLine}</p>
     <div class="letter-sec"><b>Time</b>${times}</div>
     <div class="letter-sec"><b>Place</b>${placeBlock}</div>
-    <div class="letter-sec"><b>Note</b>${state.memo ? esc(state.memo) : 'None'}</div>`;
+    <div class="letter-sec"><b>Note</b>${noteBlock}</div>`;
 }
 function refreshLetter() {
   document.getElementById('letter-body').innerHTML = letterBodyHTML();

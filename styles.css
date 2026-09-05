@@ -57,6 +57,7 @@ body.pre-walk #hud {
   visibility: hidden;
 }
 body.pre-walk #overlays > div:not(#intro) {
+  display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;
   visibility: hidden !important;
@@ -677,6 +678,10 @@ textarea { resize: none; min-height: 3.4rem; line-height: 1.45; }
   transform-origin: 50% 30%;
   text-align: center;
   min-width: min(19rem, 84vw);
+  max-height: calc(100vh - 60px);
+  max-height: calc(100dvh - 60px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #dday-card .dday-eyebrow {
@@ -797,11 +802,11 @@ textarea { resize: none; min-height: 3.4rem; line-height: 1.45; }
   margin-bottom: 0.4rem;
 }
 
-#letter-card .letter-sec {
+#dday-card .letter-sec, #letter-card .letter-sec {
   margin-top: 0.5rem;
 }
 
-#letter-card .letter-sec b {
+#dday-card .letter-sec b, #letter-card .letter-sec b {
   display: block;
   font-size: 0.66rem;
   letter-spacing: 0.22em;
@@ -810,7 +815,7 @@ textarea { resize: none; min-height: 3.4rem; line-height: 1.45; }
   margin-bottom: 0.15rem;
 }
 
-#letter-card .wax-dot {
+.wax-dot, #dday-card .wax-dot, #letter-card .wax-dot {
   width: 30px;
   height: 30px;
   border-radius: 50%;
