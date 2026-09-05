@@ -126,6 +126,97 @@ export const ANCHORS = {
   star: new THREE.Vector3(0, 9.45, -106.3),
 };
 
+// ————— geometry builders —————
+
+function mergeGeometries(geos) {
+  let totalVerts = 0;
+  for (const g of geos) {
+    totalVerts += g.attributes.position.count;
+  }
+  const pos = new Float32Array(totalVerts * 3);
+  const norm = new Float32Array(totalVerts * 3);
+  const indices = [];
+  let vOffset = 0;
+  for (const g of geos) {
+    const p = g.attributes.position.array;
+    const n = g.attributes.normal.array;
+    pos.set(p, vOffset * 3);
+    norm.set(n, vOffset * 3);
+    if (g.index) {
+      for (let i = 0; i < g.index.count; i++) {
+        indices.push(g.index.array[i] + vOffset);
+      }
+    } else {
+      for (let i = 0; i < g.attributes.position.count; i++) {
+        indices.push(i + vOffset);
+      }
+    }
+    vOffset += g.attributes.position.count;
+  }
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  merged.setAttribute('normal', new THREE.BufferAttribute(norm, 3));
+  merged.setIndex(indices);
+  return merged;
+}
+
+function buildGableRoof(W, D, H, roofH, roofMat, snowMat, wallMat, overX = 0.22, overZ = 0.25) {
+  const g = new THREE.Group();
+
+  // Triangular gable pediments (front & back walls closing the attic)
+  const gableGeo = new THREE.BufferGeometry();
+  const gablePositions = new Float32Array([
+    // Front triangle (facing +Z)
+    -W / 2, H, D / 2,
+     W / 2, H, D / 2,
+     0, H + roofH, D / 2,
+    // Back triangle (facing -Z)
+     W / 2, H, -D / 2,
+    -W / 2, H, -D / 2,
+     0, H + roofH, -D / 2,
+  ]);
+  gableGeo.setAttribute('position', new THREE.BufferAttribute(gablePositions, 3));
+  gableGeo.computeVertexNormals();
+  const gableMesh = new THREE.Mesh(gableGeo, wallMat);
+  g.add(gableMesh);
+
+  // Sloped roof slabs with eaves
+  const hw = W / 2 + overX;
+  const L = Math.hypot(hw, roofH);
+  const pitch = Math.atan2(roofH, hw);
+  const totalD = D + overZ * 2;
+
+  // Left slope
+  const leftGroup = new THREE.Group();
+  leftGroup.position.set(-hw / 2, H + roofH / 2, 0);
+  leftGroup.rotation.z = pitch;
+  const leftWood = new THREE.Mesh(new THREE.BoxGeometry(L, 0.08, totalD), roofMat);
+  leftGroup.add(leftWood);
+  const leftSnow = new THREE.Mesh(new THREE.BoxGeometry(L + 0.04, 0.12, totalD + 0.04), snowMat);
+  leftSnow.position.y = 0.10;
+  leftGroup.add(leftSnow);
+  g.add(leftGroup);
+
+  // Right slope
+  const rightGroup = new THREE.Group();
+  rightGroup.position.set(hw / 2, H + roofH / 2, 0);
+  rightGroup.rotation.z = -pitch;
+  const rightWood = new THREE.Mesh(new THREE.BoxGeometry(L, 0.08, totalD), roofMat);
+  rightGroup.add(rightWood);
+  const rightSnow = new THREE.Mesh(new THREE.BoxGeometry(L + 0.04, 0.12, totalD + 0.04), snowMat);
+  rightSnow.position.y = 0.10;
+  rightGroup.add(rightSnow);
+  g.add(rightGroup);
+
+  // Snow ridge cap along the peak
+  const ridge = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, totalD + 0.06, 12), snowMat);
+  ridge.rotation.x = Math.PI / 2;
+  ridge.position.set(0, H + roofH + 0.03, 0);
+  g.add(ridge);
+
+  return g;
+}
+
 // ————— world builder —————
 
 export function createVillage(preset, photoUrls) {
@@ -258,10 +349,16 @@ export function createVillage(preset, photoUrls) {
 
   // ————— distant forest (instanced) + mountains —————
   {
-    const cone = new THREE.ConeGeometry(1.0, 3.2, 6);
+    const t1 = new THREE.ConeGeometry(1.05, 1.35, 6);
+    t1.translate(0, 0.65, 0);
+    const t2 = new THREE.ConeGeometry(0.80, 1.15, 6);
+    t2.translate(0, 1.45, 0);
+    const t3 = new THREE.ConeGeometry(0.52, 0.95, 6);
+    t3.translate(0, 2.15, 0);
+    const treeGeo = mergeGeometries([t1, t2, t3]);
     const mat = lam(C.greenDark);
     const n = preset.extraMeshes ? 64 : 34;
-    const inst = new THREE.InstancedMesh(cone, mat, n);
+    const inst = new THREE.InstancedMesh(treeGeo, mat, n);
     const m = new THREE.Matrix4();
     for (let i = 0; i < n; i++) {
       const nearApproach = i < n * 0.3;
@@ -294,14 +391,20 @@ export function createVillage(preset, photoUrls) {
       const cap = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.34, 8), lam(C.woodDark));
       cap.position.set(x, 3.55, 3.0);
       gate.add(cap);
+      const capSnow = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.16, 8), lam(C.snowFresh));
+      capSnow.position.set(x, 3.68, 3.0);
+      gate.add(capSnow);
       const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 1.1, 6), lam(C.woodDark));
       lampPost.position.set(x * 0.72, 0.55, 3.6);
       gate.add(lampPost);
     });
-    // arch beam
+    // arch beam + fresh snow layer
     const beam = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.22, 0.24), lam(C.woodMid));
     beam.position.set(0, 3.28, 3.0);
     gate.add(beam);
+    const beamSnow = new THREE.Mesh(new THREE.BoxGeometry(3.14, 0.08, 0.26), lam(C.snowFresh));
+    beamSnow.position.set(0, 3.42, 3.0);
+    gate.add(beamSnow);
     // wreath
     const wreath = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.13, 8, 20), lam(C.green));
     wreath.position.set(0, 3.28, 3.13);
@@ -382,28 +485,64 @@ export function createVillage(preset, photoUrls) {
     const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), bodyMat);
     body.position.y = H / 2;
     g.add(body);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.15, 1.35, 4), lam(warm ? 0x241a12 : 0x1c2430));
-    roof.position.y = H + 0.62;
-    roof.rotation.y = Math.PI / 4;
+
+    // Single cohesive alpine gable roof with deep eaves, snow mantle and ridge cap
+    const roofMat = lam(warm ? 0x241a12 : 0x1c2430);
+    const snowMat = lam(0xf4f1e8);
+    const roof = buildGableRoof(W, D, H, 1.15, roofMat, snowMat, bodyMat, 0.22, 0.25);
     g.add(roof);
-    const snowRoof = new THREE.Mesh(new THREE.ConeGeometry(2.02, 0.5, 4), lam(0xf4f1e8));
-    snowRoof.position.y = H + 1.16;
-    snowRoof.rotation.y = Math.PI / 4;
-    g.add(snowRoof);
-    // chimney + smoke emitter
-    const ch = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.7, 0.26), lam(C.woodDark));
-    ch.position.set(0.62, H + 0.85, 0.3);
-    g.add(ch);
-    if (preset.smoke) props.smokeEmitters.push({ pos: new THREE.Vector3(x + 0.62, H + 1.3, z + 0.3), next: 0 });
-    // windows
+
+    // Corner timber framing posts
+    const postMat = lam(C.woodDark);
+    [
+      [-W / 2 + 0.05, -D / 2 + 0.05],
+      [ W / 2 - 0.05, -D / 2 + 0.05],
+      [-W / 2 + 0.05,  D / 2 - 0.05],
+      [ W / 2 - 0.05,  D / 2 - 0.05],
+    ].forEach(([px, pz]) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, H, 0.12), postMat);
+      post.position.set(px, H / 2, pz);
+      g.add(post);
+    });
+
+    // Masonry stone chimney + smoke emitter
+    const chGroup = new THREE.Group();
+    const chBody = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.95, 0.34), lam(0x3e352e));
+    chBody.position.set(0.65, H + 0.85, 0.35);
+    chGroup.add(chBody);
+    const chRim = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.42), lam(0x28221c));
+    chRim.position.set(0.65, H + 1.32, 0.35);
+    chGroup.add(chRim);
+    const chSnow = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.05, 0.40), snowMat);
+    chSnow.position.set(0.65, H + 1.38, 0.35);
+    chGroup.add(chSnow);
+    g.add(chGroup);
+
+    if (preset.smoke) {
+      const chPos = new THREE.Vector3(0.65, H + 1.45, 0.35)
+        .applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY)
+        .add(new THREE.Vector3(x, 0, z));
+      props.smokeEmitters.push({ pos: chPos, next: 0 });
+    }
+
+    // windows with mullions and snow sills
     const winMat = bas(warm ? 0xffd9a0 : 0x9fb6d8);
     [[-0.62, 1.15, D / 2 + 0.01], [0.62, 1.15, D / 2 + 0.01]].forEach(([wx, wy, wz]) => {
       const win = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.4), winMat);
       win.position.set(wx, wy, wz);
       g.add(win);
-      const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.035, 0.02), lam(C.woodDark));
-      mullion.position.set(wx, wy, wz + 0.005);
-      g.add(mullion);
+      const mullionH = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.035, 0.02), lam(C.woodDark));
+      mullionH.position.set(wx, wy, wz + 0.005);
+      g.add(mullionH);
+      const mullionV = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.42, 0.02), lam(C.woodDark));
+      mullionV.position.set(wx, wy, wz + 0.005);
+      g.add(mullionV);
+      const sill = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.08), lam(C.woodDark));
+      sill.position.set(wx, wy - 0.22, wz + 0.03);
+      g.add(sill);
+      const sillSnow = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.03, 0.07), snowMat);
+      sillSnow.position.set(wx, wy - 0.19, wz + 0.03);
+      g.add(sillSnow);
     });
     g.userData.windowMat = winMat;
     if (preset.glow) {
@@ -411,6 +550,16 @@ export function createVillage(preset, photoUrls) {
       wg.position.set(0, 1.2, D / 2 + 0.3);
       g.add(wg);
     }
+    // porch canopy with snow overhang above door
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.04, 0.42), lam(C.woodDark));
+    canopy.position.set(0, 1.76, D / 2 + 0.20);
+    canopy.rotation.x = 0.16;
+    g.add(canopy);
+    const canopySnow = new THREE.Mesh(new THREE.BoxGeometry(1.10, 0.08, 0.44), snowMat);
+    canopySnow.position.set(0, 1.81, D / 2 + 0.20);
+    canopySnow.rotation.x = 0.16;
+    g.add(canopySnow);
+
     // porch light
     const porch = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), bas(0xffd9a0));
     porch.position.set(0, 1.62, D / 2 + 0.18);
@@ -461,15 +610,31 @@ export function createVillage(preset, photoUrls) {
     { x: 3.5, z: -13.5, rot: -0.45 },
   ].forEach((s, i) => {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.3, 2.2), lam(0x2e2118));
-    body.position.y = 1.15;
+    const W = 2.6, H = 2.3, D = 2.2;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), lam(0x2e2118));
+    body.position.y = H / 2;
     g.add(body);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.05, 0.9, 4), lam(0x1a130d));
-    roof.position.y = 2.75; roof.rotation.y = Math.PI / 4;
+
+    // Single cohesive alpine gable roof
+    const roofMat = lam(0x1a130d);
+    const snowMat = lam(0xf4f1e8);
+    const roof = buildGableRoof(W, D, H, 1.15, roofMat, snowMat, lam(0x2e2118), 0.22, 0.22);
     g.add(roof);
-    const snowRoof = new THREE.Mesh(new THREE.ConeGeometry(1.95, 0.34, 4), lam(0xf4f1e8));
-    snowRoof.position.y = 3.3; snowRoof.rotation.y = Math.PI / 4;
-    g.add(snowRoof);
+
+    // Corner timber framing posts
+    const postMat = lam(C.woodDark);
+    [
+      [-W / 2 + 0.05, -D / 2 + 0.05],
+      [ W / 2 - 0.05, -D / 2 + 0.05],
+      [-W / 2 + 0.05,  D / 2 - 0.05],
+      [ W / 2 - 0.05,  D / 2 - 0.05],
+    ].forEach(([px, pz]) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, H, 0.12), postMat);
+      post.position.set(px, H / 2, pz);
+      g.add(post);
+    });
+
+    // Shop window
     const winMat = bas(0x241a12);
     const win = new THREE.Mesh(new THREE.PlaneGeometry(1.35, 0.95), winMat);
     win.position.set(0, 1.05, 1.11);
@@ -477,6 +642,47 @@ export function createVillage(preset, photoUrls) {
     const frame = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.08, 0.05), lam(C.woodDark));
     frame.position.set(0, 1.05, 1.09);
     g.add(frame);
+
+    // Window pane mullions
+    const mullH = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.035, 0.02), lam(C.woodDark));
+    mullH.position.set(0, 1.05, 1.115);
+    g.add(mullH);
+    [-0.34, 0.34].forEach((mx) => {
+      const mullV = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.95, 0.02), lam(C.woodDark));
+      mullV.position.set(mx, 1.05, 1.115);
+      g.add(mullV);
+    });
+
+    // Window sill with snow
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.05, 0.08), lam(C.woodDark));
+    sill.position.set(0, 0.54, 1.13);
+    g.add(sill);
+    const sillSnow = new THREE.Mesh(new THREE.BoxGeometry(1.46, 0.03, 0.07), snowMat);
+    sillSnow.position.set(0, 0.58, 1.13);
+    g.add(sillSnow);
+
+    // Shop signboard above window
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.32, 0.05), lam(C.woodWarm));
+    sign.position.set(0, 1.82, 1.13);
+    g.add(sign);
+    const signSnow = new THREE.Mesh(new THREE.BoxGeometry(1.64, 0.05, 0.07), snowMat);
+    signSnow.position.set(0, 2.0, 1.13);
+    g.add(signSnow);
+
+    // Chimney with snow and smoke
+    const ch = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 0.3), lam(0x352b22));
+    ch.position.set(0.65, H + 0.45, -0.2);
+    g.add(ch);
+    const chSnow = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.05, 0.34), snowMat);
+    chSnow.position.set(0.65, H + 0.87, -0.2);
+    g.add(chSnow);
+    if (preset.smoke) {
+      const chPos = new THREE.Vector3(0.65, H + 0.95, -0.2)
+        .applyAxisAngle(new THREE.Vector3(0, 1, 0), s.rot)
+        .add(new THREE.Vector3(s.x, 0, s.z));
+      props.smokeEmitters.push({ pos: chPos, next: i * 0.35 });
+    }
+
     g.position.set(s.x, 0, s.z);
     g.rotation.y = s.rot;
     scene.add(g);
@@ -502,6 +708,9 @@ export function createVillage(preset, photoUrls) {
       const lamp = new THREE.Group();
       const cage = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.24, 0.17), lam(C.woodDark));
       lamp.add(cage);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.04, 0.19), lam(C.snowFresh));
+      cap.position.y = 0.13;
+      lamp.add(cap);
       const glass = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.12), bas(0xffd9a0));
       lamp.add(glass);
       lamp.position.set(x - Math.sign(x) * 0.48, 2.52, z);
@@ -574,6 +783,11 @@ export function createVillage(preset, photoUrls) {
     awning.position.set(1.3, 2.42, -44.66);
     awning.rotation.x = -0.32;
     st.add(awning);
+    // fresh snow ridge along top of awning
+    const awningSnow = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.74, 8), lam(C.snowFresh));
+    awningSnow.rotation.z = Math.PI / 2;
+    awningSnow.position.set(1.3, 2.63, -45.15);
+    st.add(awningSnow);
     // pot with steam
     const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.19, 0.3, 12), lam(0x2a2118));
     pot.position.set(0.75, 1.11, -44.6);
@@ -584,12 +798,19 @@ export function createVillage(preset, photoUrls) {
     sign.position.set(1.3, 3.0, -45.05);
     sign.rotation.x = -0.06;
     st.add(sign);
+    const signSnow = new THREE.Mesh(new THREE.BoxGeometry(1.64, 0.05, 0.09), lam(C.snowFresh));
+    signSnow.position.set(1.3, 3.26, -45.05);
+    st.add(signSnow);
     // crates
     [[2.75, 0, -44.4, 0.5], [-0.15, 0, -44.3, 0.38]].forEach(([x, y, z, s]) => {
       const crate = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), lam(C.woodMid));
       crate.position.set(x, s / 2, z);
       crate.rotation.y = Math.random();
       st.add(crate);
+      const crateSnow = new THREE.Mesh(new THREE.BoxGeometry(s * 0.92, 0.04, s * 0.92), lam(C.snowFresh));
+      crateSnow.position.set(x, s + 0.02, z);
+      crateSnow.rotation.y = crate.rotation.y;
+      st.add(crateSnow);
     });
     // yes token (brass) and the ornament (3d until it flees)
     const yes3d = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.03, 20), new THREE.MeshStandardMaterial({ color: C.gold, metalness: 0.75, roughness: 0.3 }));
@@ -625,6 +846,9 @@ export function createVillage(preset, photoUrls) {
     const beam = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.14, 0.14), lam(C.woodMid));
     beam.position.set(0, 2.85, beamZ);
     scene.add(beam);
+    const beamSnow = new THREE.Mesh(new THREE.BoxGeometry(4.44, 0.06, 0.16), lam(C.snowFresh));
+    beamSnow.position.set(0, 2.94, beamZ);
+    scene.add(beamSnow);
     [[-2.2], [2.2]].forEach(([x]) => {
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.9, 8), lam(C.woodDark));
       post.position.set(x, 1.45, beamZ);
@@ -786,41 +1010,69 @@ export function createVillage(preset, photoUrls) {
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.42, 1.7, 8), lam(0x3a2a1c));
     trunk.position.set(0, 0.85, -106.3);
     g.add(trunk);
+    // 5 tiered evergreen foliage layers with natural snow mantles and bough puffs
     const tiers = [
-      [2.25, 2.7, 2.7], [1.8, 2.35, 4.5], [1.35, 2.05, 6.2], [0.9, 1.75, 7.8],
+      [2.40, 2.7, 2.6],
+      [1.95, 2.4, 4.3],
+      [1.50, 2.1, 5.9],
+      [1.05, 1.8, 7.3],
+      [0.65, 1.5, 8.5],
     ];
+    const foliageColors = [0x0f241a, 0x143324, 0x1a402e, 0x122e20, 0x183b2b];
+    const snowMat = lam(0xf5f7f2);
+    const puffGeo = new THREE.SphereGeometry(0.10, 6, 5);
+
     tiers.forEach(([r, h, y], i) => {
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10), lam(i % 2 ? C.green : 0x11261f));
+      // Main pine cone tier
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 14), lam(foliageColors[i]));
       cone.position.set(0, y, -106.3);
       g.add(cone);
-      const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.9, h * 0.34, 10), lam(0xeef2ea, { transparent: true, opacity: 0.5 }));
-      cap.position.set(0, y + h * 0.3, -106.3);
-      g.add(cap);
+
+      // Cohesive snow mantle matching the slope of the pine foliage
+      const snowMantle = new THREE.Mesh(new THREE.ConeGeometry(r * 0.95, h * 0.60, 14), snowMat);
+      snowMantle.position.set(0, y + h * 0.20, -106.3);
+      g.add(snowMantle);
+
+      // Soft snow puffs along the outer boughs
+      const puffCount = Math.floor(r * 4.2);
+      for (let p = 0; p < puffCount; p++) {
+        const a = (p / puffCount) * Math.PI * 2 + (i * 0.6);
+        const pr = r * 0.90;
+        const puff = new THREE.Mesh(puffGeo, snowMat);
+        puff.scale.set(1.2, 0.7, 1.0);
+        puff.position.set(Math.cos(a) * pr, y - h * 0.44, -106.3 + Math.sin(a) * pr);
+        g.add(puff);
+      }
     });
-    // ornaments
-    const goldMat = new THREE.MeshStandardMaterial({ color: C.gold, metalness: 0.65, roughness: 0.3 });
-    const berryMat = new THREE.MeshStandardMaterial({ color: C.berry, metalness: 0.2, roughness: 0.35 });
-    for (let i = 0; i < 26; i++) {
-      const tier = i % 4;
+
+    // Ornaments across all 5 tiers
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xdfb758, metalness: 0.75, roughness: 0.25 });
+    const berryMat = new THREE.MeshStandardMaterial({ color: 0xaa2030, metalness: 0.45, roughness: 0.25 });
+    const silverMat = new THREE.MeshStandardMaterial({ color: 0xd8e4f0, metalness: 0.75, roughness: 0.3 });
+    const orbMats = [goldMat, berryMat, silverMat];
+
+    for (let i = 0; i < 35; i++) {
+      const tier = i % 5;
       const [r, h, y] = tiers[tier];
       const a = Math.random() * Math.PI * 2;
-      const rr = r * (0.55 + Math.random() * 0.35);
-      const oy = y - h * 0.35 + Math.random() * h * 0.5;
-      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), i % 2 ? goldMat : berryMat);
+      const rr = r * (0.60 + Math.random() * 0.32);
+      const oy = y - h * 0.38 + Math.random() * h * 0.48;
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), orbMats[i % 3]);
       orb.position.set(Math.cos(a) * rr, oy, -106.3 + Math.sin(a) * rr);
       orb.userData.kind = 'treeOrnament';
       g.add(orb);
       props.treeOrnaments.push(orb);
       props.interactive.push(orb);
     }
-    // light string (helix of warm points)
-    const n = 64;
+
+    // Fairy light helix winding up the tree
+    const n = 72;
     const pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
       const s = i / n;
-      const y = 1.4 + s * 7.6;
-      const tR = 2.1 * (1 - s * 0.78) + 0.12;
-      const a = s * Math.PI * 14;
+      const y = 1.35 + s * 7.8;
+      const tR = 2.25 * (1 - s * 0.80) + 0.12;
+      const a = s * Math.PI * 15;
       pos[i * 3] = Math.cos(a) * tR;
       pos[i * 3 + 1] = y;
       pos[i * 3 + 2] = -106.3 + Math.sin(a) * tR;
@@ -829,13 +1081,29 @@ export function createVillage(preset, photoUrls) {
     lgeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     props.treeBulbs = new THREE.Points(lgeo, new THREE.PointsMaterial({ color: 0xffd9a0, size: 0.07, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
     g.add(props.treeBulbs);
-    // star
-    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.42), new THREE.MeshStandardMaterial({ color: 0xffe2a8, metalness: 0.5, roughness: 0.2, emissive: 0xaa7a20, emissiveIntensity: 0.7 }));
-    star.scale.set(0.62, 1, 0.62);
-    star.position.copy(ANCHORS.star);
-    star.rotation.y = 0.4;
-    g.add(star);
-    props.star = star;
+
+    // 8-pointed golden Bethlehem star
+    const starGroup = new THREE.Group();
+    const starMat = new THREE.MeshStandardMaterial({
+      color: 0xffe6a8,
+      metalness: 0.55,
+      roughness: 0.2,
+      emissive: 0xbb8a24,
+      emissiveIntensity: 0.75,
+    });
+    const starCore1 = new THREE.Mesh(new THREE.OctahedronGeometry(0.44), starMat);
+    starCore1.scale.set(0.55, 1.05, 0.55);
+    starGroup.add(starCore1);
+    const starCore2 = new THREE.Mesh(new THREE.OctahedronGeometry(0.36), starMat);
+    starCore2.rotation.z = Math.PI / 4;
+    starCore2.scale.set(0.55, 0.95, 0.55);
+    starGroup.add(starCore2);
+    const starGem = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), starMat);
+    starGroup.add(starGem);
+    starGroup.position.copy(ANCHORS.star);
+    starGroup.rotation.y = 0.4;
+    g.add(starGroup);
+    props.star = starGroup;
     if (preset.glow) {
       const sg = sprite(glowTex, 0xffd9a0, 4.6, 0.55);
       sg.position.copy(ANCHORS.star);
@@ -882,6 +1150,9 @@ export function createVillage(preset, photoUrls) {
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 0.16), lam(C.woodDark));
       head.position.set(x, 2.7, z);
       scene.add(head);
+      const headSnow = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.18), lam(C.snowFresh));
+      headSnow.position.set(x, 2.82, z);
+      scene.add(headSnow);
       const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.1), bas(0xffd9a0));
       bulb.position.set(x, 2.68, z);
       scene.add(bulb);

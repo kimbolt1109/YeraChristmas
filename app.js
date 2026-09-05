@@ -5,7 +5,7 @@ import * as THREE from './vendor/three.module.min.js';
 import { quality, watchFPS, onTierDrop } from './quality.js';
 import { audio } from './audio.js';
 import { Snow } from './snow.js';
-import { createVillage, cameraPose, animateVillage, ANCHORS } from './village.js';
+import { createVillage, cameraPose, animateVillage, ANCHORS } from './village.js?v=6';
 import { ScrollRig } from './scroll-rig.js';
 
 const STORAGE_KEY = 'yera-christmas-2026';
