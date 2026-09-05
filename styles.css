@@ -678,8 +678,8 @@ textarea { resize: none; min-height: 3.4rem; line-height: 1.45; }
   transform-origin: 50% 30%;
   text-align: center;
   min-width: min(19rem, 84vw);
-  max-height: calc(100vh - 60px);
-  max-height: calc(100dvh - 60px);
+  max-height: calc(100vh - 75px);
+  max-height: calc(100dvh - 75px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }

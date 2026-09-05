@@ -5,7 +5,7 @@ import * as THREE from './vendor/three.module.min.js';
 import { quality, watchFPS, onTierDrop } from './quality.js';
 import { audio } from './audio.js';
 import { Snow } from './snow.js';
-import { createVillage, cameraPose, animateVillage, ANCHORS } from './village.js?v=6';
+import { createVillage, cameraPose, animateVillage, ANCHORS } from './village.js?v=7';
 import { ScrollRig } from './scroll-rig.js';
 
 const STORAGE_KEY = 'yera-christmas-2026';
@@ -18,6 +18,7 @@ const defaultState = {
   timeUnsure: false,
   places: [],
   customPlace: '',
+  benchNote: '',
   memo: '',
   noButtonEscapes: 0,
   letterOpened: false,
@@ -25,6 +26,7 @@ const defaultState = {
   cameraT: 0,
 };
 let state = loadState();
+window.state = state;
 
 function loadState() {
   try {
@@ -39,6 +41,7 @@ function loadState() {
   } catch (e) { return { ...defaultState, times: [], places: [] }; }
 }
 function saveState() {
+  window.state = state;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* private mode */ }
 }
 
@@ -318,6 +321,18 @@ function tween(fn, dur, done) {
   requestAnimationFrame(step);
 }
 
+let advanceTimer = null;
+function scheduleAdvance(fromT, delayMs) {
+  if (advanceTimer) clearTimeout(advanceTimer);
+  advanceTimer = setTimeout(() => {
+    advanceTimer = null;
+    rig.autoAdvance(fromT);
+  }, delayMs);
+}
+window.cancelPendingAdvance = () => {
+  if (advanceTimer) { clearTimeout(advanceTimer); advanceTimer = null; }
+};
+
 envelopeBtn.addEventListener('click', () => {
   audio.ensure();
   rig.requestGyro();
@@ -334,10 +349,12 @@ envelopeBtn.addEventListener('click', () => {
     audio.chime(1046, 0.06);
   });
   setOverlayDisplay(envelopeBtn, false);
+  const eb = document.getElementById('envelope-tap');
+  if (eb) eb.style.display = 'none';
   document.getElementById('gate-caption-text').innerHTML = 'It’s open.<br>Walk in when you’re ready.';
   toast('Sound is nicer · mute it at the top right anytime');
   rig.answer('gate');
-  setTimeout(() => rig.autoAdvance(STOPS[1].t), 500);
+  scheduleAdvance(STOPS[1].t, 500);
 });
 
 // ————— Lantern Lane —————
@@ -430,9 +447,10 @@ function chooseDoor(side) {
 
   applyDoorVisual(side);
   saveState();
+  refreshLetter();
   rig.answer('cottages');
   if (side === 'left') {
-    setTimeout(() => rig.autoAdvance(STOPS[3].t), 750);
+    scheduleAdvance(STOPS[3].t, 750);
   }
 }
 doorLEl.addEventListener('click', () => chooseDoor('left'));
@@ -447,21 +465,26 @@ unsureEl.addEventListener('click', () => {
   state.availability = 'unsure';
   applyDoorVisual('unsure');
   saveState();
+  refreshLetter();
   rig.answer('cottages');
   unsureEl.querySelector('#unsure-plaque').textContent = 'The days are still open, then.';
-  setTimeout(() => rig.autoAdvance(STOPS[3].t), 650);
+  scheduleAdvance(STOPS[3].t, 650);
 });
 function saveBenchNote() {
   const v = document.getElementById('busy-note').value.trim();
-  if (v) state.memo = v;
+  if (v) {
+    state.benchNote = v;
+    if (!state.memo) state.memo = v;
+  }
   saveState();
+  refreshLetter();
   toast('Saved on the bench.');
-  setTimeout(() => rig.autoAdvance(STOPS[3].t), 400);
+  scheduleAdvance(STOPS[3].t, 400);
 }
 busyBench.addEventListener('click', (e) => {
   if (e.target.id === 'busy-save') saveBenchNote();
   if (e.target.id === 'busy-change-free') chooseDoor('left');
-  if (e.target.id === 'busy-skip') { saveState(); setTimeout(() => rig.autoAdvance(STOPS[3].t), 300); }
+  if (e.target.id === 'busy-skip') { saveState(); refreshLetter(); scheduleAdvance(STOPS[3].t, 300); }
 });
 
 // ————— Scene 2 · the stall —————
@@ -491,6 +514,8 @@ const noBtn = noEl.querySelector('#no-ornament');
 const noLabel = noEl.querySelector('#no-label');
 const noState = { x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, fleeing: false, settled: true };
 let noScreen = { x: 0, y: 0 };
+let noGone = false;
+window.noGone = noGone;
 
 function stallRect() {
   const a = projectToScreen(ANCHORS.stallA);
@@ -578,16 +603,19 @@ function chooseYes() {
   audio.shimmer();
   state.hangout = 'yes';
   saveState();
+  refreshLetter();
   const y = projectToScreen(ANCHORS.yesToken);
   burstConfetti(y.x, y.y);
   noGone = true;
+  window.noGone = true;
   setOverlayDisplay(noEl, false);
   props.no3d.visible = false;
   snow.burstAt(ANCHORS.noOrnament, 12, 1.2, 1.0);
   rig.answer('stall');
-  setTimeout(() => rig.autoAdvance(STOPS[4].t), 900);
+  scheduleAdvance(STOPS[4].t, 900);
 }
 yesEl.addEventListener('click', chooseYes);
+yesEl.querySelector('#yes-token')?.addEventListener('click', chooseYes);
 
 // proximity flee: finger (or cursor) comes within 88px of the ornament
 document.addEventListener('pointerdown', (e) => {
@@ -602,6 +630,7 @@ document.addEventListener('pointerdown', (e) => {
 function realNoEnding() {
   state.hangout = 'no';
   saveState();
+  refreshLetter();
   audio.chime(392, 0.06);
   noBtn.classList.add('real');
   noLabel.textContent = 'No, I really can’t';
@@ -647,11 +676,13 @@ watchEls.forEach((el, i) => el.addEventListener('click', () => {
   else { state.times.push(id); audio.chime(1046 + i * 160, 0.05); }
   saveState();
   refreshWatchVisuals();
+  refreshLetter();
 }));
 refreshWatchVisuals();
 document.getElementById('time-unsure').addEventListener('click', () => {
   state.timeUnsure = !state.timeUnsure;
   saveState();
+  refreshLetter();
   document.getElementById('time-unsure').style.textDecoration = state.timeUnsure ? 'underline' : 'none';
   document.getElementById('time-unsure').style.color = state.timeUnsure ? 'var(--gold-soft)' : '';
 });
@@ -664,7 +695,7 @@ clocksCard.addEventListener('click', (e) => {
   }
   rig.answer('clocks');
   saveState();
-  setTimeout(() => rig.autoAdvance(STOPS[5].t), 350);
+  scheduleAdvance(STOPS[5].t, 350);
 });
 
 // ————— Scene 4 · the gallery of places —————
@@ -735,7 +766,7 @@ galleryCard.addEventListener('click', (e) => {
     state.completedAt = state.completedAt || new Date().toISOString();
     saveState();
     rig.answer('gallery-lock');
-    setTimeout(() => rig.autoAdvance(0.825), 350);
+    scheduleAdvance(0.825, 350);
   }
 });
 globeEls.forEach((el, i) => el.addEventListener('click', () => {
@@ -744,6 +775,7 @@ globeEls.forEach((el, i) => el.addEventListener('click', () => {
   else { state.places.push(id); audio.shimmer(); snow.burstAt(ANCHORS.globes[i], 10, 0.8, 0.9); }
   saveState();
   refreshGlobeVisuals();
+  refreshLetter();
 }));
 customGlobeEl.addEventListener('click', () => {
   document.getElementById('custom-place').focus();
@@ -753,6 +785,7 @@ document.getElementById('custom-place').addEventListener('input', (e) => {
   state.customPlace = e.target.value;
   saveState();
   refreshGlobeVisuals();
+  refreshLetter();
 });
 refreshGlobeVisuals();
 
@@ -767,15 +800,21 @@ const deskCard = addOverlay({
   anchor: ANCHORS.deskNote, stop: 'desk', win: 0.05,
 });
 if (state.memo) document.getElementById('desk-note').value = state.memo;
+document.getElementById('desk-note').addEventListener('input', (e) => {
+  state.memo = e.target.value;
+  saveState();
+  refreshLetter();
+});
 deskCard.addEventListener('click', (e) => {
   if (e.target.id !== 'seal-cta') return;
   state.memo = document.getElementById('desk-note').value.trim();
   state.completedAt = state.completedAt || new Date().toISOString();
   saveState();
+  refreshLetter();
   audio.wax();
   tween((s) => { props.deskWax.scale.set(Math.max(0.01, s), 1, Math.max(0.01, s)); }, 700);
   toast('Sealed.');
-  setTimeout(() => rig.autoAdvance(STOPS[8].t), 600);
+  scheduleAdvance(STOPS[8].t, 600);
 });
 
 // ————— Scene 6 · the tree —————
@@ -810,7 +849,7 @@ const ddayEl = addOverlay({
   anchor: null, stop: 'tree', pin: { start: 0.93, end: 1.02 }, clampTo: 'none',
 });
 ddayEl.style.left = '50%';
-ddayEl.style.top = `calc(${Math.max(16, safeTop())}px + 2.8rem)`;
+ddayEl.style.top = `calc(${Math.max(16, safeTop())}px + 3.2rem)`;
 ddayEl.style.transform = 'translateX(-50%)';
 ddayEl.style.transformOrigin = '50% 0%';
 
@@ -944,22 +983,42 @@ eveSwitch.addEventListener('click', toggleEve);
 
 // ————— the letter summary —————
 function letterBodyHTML() {
-  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
   const availLine = state.availability === 'busy'
     ? 'A promise or family meeting comes first on Christmas Eve or Christmas.'
-    : (state.availability === 'unsure' ? 'You’re not sure yet — the days are still open.' : 'No promise or family meeting on Christmas Eve or Christmas.');
+    : (state.availability === 'unsure'
+      ? 'You’re not sure yet — the days are still open.'
+      : (state.availability === 'free'
+        ? 'No promise or family meeting on Christmas Eve or Christmas.'
+        : 'Still deciding on availability.'));
 
   const yesLine = state.hangout === 'no'
     ? 'Caught the ornament that runs away.'
-    : (state.hangout === 'yes' ? 'You said yes to hanging out.' : 'The stall is still waiting for an answer.');
+    : (state.hangout === 'yes'
+      ? 'You said yes to hanging out.'
+      : 'The stall is still waiting for an answer.');
 
-  const times = SLOTS.filter((s) => state.times.includes(s.id)).map((s) => `· ${s.title}`).join('<br>') || '· (none picked yet)';
+  let times = SLOTS.filter((s) => state.times.includes(s.id)).map((s) => `· ${s.title}`).join('<br>');
+  if (!times) {
+    times = state.timeUnsure ? '· Not sure yet — open to anything' : '· (none picked yet)';
+  }
+
   const places = PLACES.filter((p) => state.places.includes(p.id))
     .map((p) => `· ${p.name} <span lang="ko" style="color:#96703c">(${p.hangul})</span>`).join('<br>');
   const custom = state.customPlace ? `${places ? '<br>' : ''}· ${esc(state.customPlace)}` : '';
   const placeBlock = (places || custom) ? `${places}${custom}` : '· (none picked yet)';
-  const noteBlock = state.memo ? `· ${esc(state.memo)}` : '· (none)';
+
+  let noteBlock = '';
+  if (state.benchNote && state.memo && state.benchNote !== state.memo) {
+    noteBlock = `· Bench note: ${esc(state.benchNote)}<br>· Note: ${esc(state.memo)}`;
+  } else if (state.memo) {
+    noteBlock = `· ${esc(state.memo)}`;
+  } else if (state.benchNote) {
+    noteBlock = `· ${esc(state.benchNote)}`;
+  } else {
+    noteBlock = '· (none)';
+  }
 
   return `<p>${availLine}</p>
     <p style="margin-top:0.3rem">${yesLine}</p>
@@ -967,10 +1026,109 @@ function letterBodyHTML() {
     <div class="letter-sec"><b>Place</b>${placeBlock}</div>
     <div class="letter-sec"><b>Note</b>${noteBlock}</div>`;
 }
+
 function refreshLetter() {
-  document.getElementById('letter-body').innerHTML = letterBodyHTML();
+  const el = document.getElementById('letter-body');
+  if (el) el.innerHTML = letterBodyHTML();
 }
+
+function restoreWorldFromState() {
+  // 1. Gate
+  if (state.letterOpened) {
+    rig.answer('gate');
+    setOverlayDisplay(envelopeBtn, false);
+    const eb = document.getElementById('envelope-tap');
+    if (eb) eb.style.display = 'none';
+    if (props.envelopeFlap) props.envelopeFlap.rotation.x = -2.25;
+    if (props.envelopeSeal) props.envelopeSeal.scale.setScalar(0.001);
+    const cap = document.getElementById('gate-caption-text');
+    if (cap) cap.innerHTML = 'It’s open.<br>Walk in when you’re ready.';
+  }
+
+  // 2. Cottages
+  if (state.availability) {
+    rig.answer('cottages');
+    applyDoorVisual(state.availability === 'free' ? 'left' : (state.availability === 'busy' ? 'right' : 'unsure'));
+    if (state.availability === 'free') {
+      if (props.doors?.left?.doorPivot) props.doors.left.doorPivot.rotation.y = -1.7;
+      if (props.doors?.right?.doorPivot) props.doors.right.doorPivot.rotation.y = 0;
+      if (props.benchBusy) props.benchBusy.visible = false;
+      setOverlayDisplay(cottageCard, false);
+      setOverlayDisplay(busyBench, false);
+    } else if (state.availability === 'busy') {
+      if (props.doors?.right?.doorPivot) props.doors.right.doorPivot.rotation.y = 1.7;
+      if (props.doors?.left?.doorPivot) props.doors.left.doorPivot.rotation.y = 0;
+      if (props.benchBusy) props.benchBusy.visible = true;
+      setOverlayDisplay(cottageCard, false);
+      setOverlayDisplay(busyBench, true);
+      const bn = document.getElementById('busy-note');
+      if (bn && (state.benchNote || state.memo)) bn.value = state.benchNote || state.memo;
+    } else if (state.availability === 'unsure') {
+      if (props.doors?.left?.doorPivot) props.doors.left.doorPivot.rotation.y = 0;
+      if (props.doors?.right?.doorPivot) props.doors.right.doorPivot.rotation.y = 0;
+      if (props.benchBusy) props.benchBusy.visible = false;
+      setOverlayDisplay(busyBench, false);
+      setOverlayDisplay(cottageCard, true);
+      const uBtn = unsureEl?.querySelector('#unsure-plaque');
+      if (uBtn) uBtn.textContent = 'The days are still open, then.';
+    }
+  }
+
+  // 3. Stall
+  if (state.hangout) {
+    rig.answer('stall');
+    if (state.hangout === 'yes') {
+      noGone = true;
+      window.noGone = true;
+      setOverlayDisplay(noEl, false);
+      if (props.no3d) props.no3d.visible = false;
+    } else if (state.hangout === 'no') {
+      noBtn?.classList.add('real');
+      if (noLabel) noLabel.textContent = 'No, I really can’t';
+      if (props.stallLight) props.stallLight.intensity = 1.6;
+      const sh = document.getElementById('stall-h');
+      const sp = document.getElementById('stall-p');
+      if (sh) sh.textContent = 'Okay. You even caught the one that runs away.';
+      if (sp) sp.textContent = 'If we don’t go, have a quiet, pretty Christmas anyway.';
+    }
+  }
+
+  // 4. Clocks
+  if (state.times.length || state.timeUnsure) {
+    rig.answer('clocks');
+    refreshWatchVisuals();
+    if (state.timeUnsure) {
+      const tu = document.getElementById('time-unsure');
+      if (tu) {
+        tu.style.textDecoration = 'underline';
+        tu.style.color = 'var(--gold-soft)';
+      }
+    }
+  }
+
+  // 5. Gallery
+  if (state.places.length || state.customPlace) {
+    rig.answer('gallery-lock');
+    refreshGlobeVisuals();
+    const cp = document.getElementById('custom-place');
+    if (cp && state.customPlace) cp.value = state.customPlace;
+  }
+
+  // 6. Desk
+  if (state.memo) {
+    const dn = document.getElementById('desk-note');
+    if (dn) dn.value = state.memo;
+  }
+  if (state.completedAt && props.deskWax) {
+    props.deskWax.scale.set(1, 1, 1);
+  }
+
+  // 7. Tree
+  refreshLetter();
+}
+
 refreshLetter();
+restoreWorldFromState();
 setInterval(refreshLetter, 4000);
 
 // ————— save as image —————

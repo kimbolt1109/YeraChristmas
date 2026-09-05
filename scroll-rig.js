@@ -185,6 +185,9 @@ export class ScrollRig {
 
   scrollToT(t, { instant = false } = {}) {
     this.cancelAuto();
+    if (typeof window !== 'undefined' && window.cancelPendingAdvance) {
+      window.cancelPendingAdvance();
+    }
     const target = clamp(t, 0, this.maxT());
     const px = this.pxForT(target);
     this.rawT = target;
