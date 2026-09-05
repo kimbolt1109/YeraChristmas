@@ -40,7 +40,7 @@ None. The village is constructed geometry in `village.js`.
 
 ## Answers
 
-Stored in `localStorage` under `yera-christmas-2026`. Eight taps on the tree star clear it.
+Stored in `localStorage` under `yera-christmas-2026-v2`. Eight taps on the tree star clear it.
 
 ## Stack
 

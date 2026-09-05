@@ -5,10 +5,11 @@ import * as THREE from './vendor/three.module.min.js';
 import { quality, watchFPS, onTierDrop } from './quality.js';
 import { audio } from './audio.js';
 import { Snow } from './snow.js';
-import { createVillage, cameraPose, animateVillage, ANCHORS } from './village.js?v=8';
+import { createVillage, cameraPose, animateVillage, ANCHORS } from './village.js?v=9';
 import { ScrollRig } from './scroll-rig.js';
 
-const STORAGE_KEY = 'yera-christmas-2026';
+const STORAGE_KEY = 'yera-christmas-2026-v2';
+const LEGACY_KEYS = ['yera-christmas-2026'];
 
 // ————— state —————
 const defaultState = {
@@ -30,8 +31,13 @@ window.state = state;
 
 function loadState() {
   try {
-    // ?fresh=1 starts a blank village (handy for testing / re-gifting the link)
-    if (new URLSearchParams(location.search).has('fresh')) {
+    // Purge legacy storage from previous deployments / sessions
+    LEGACY_KEYS.forEach(k => {
+      try { localStorage.removeItem(k); } catch (e) { /* ignore */ }
+    });
+    // ?fresh=1 or ?reset=1 starts a blank village
+    const params = new URLSearchParams(location.search);
+    if (params.has('fresh') || params.has('reset')) {
       localStorage.removeItem(STORAGE_KEY);
     }
     const raw = localStorage.getItem(STORAGE_KEY);
