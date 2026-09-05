@@ -6,10 +6,11 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const easeInOutCubic = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 
 export class ScrollRig {
-  constructor({ stops, dotsEl, chevronEl, reduced }) {
+  constructor({ stops, dotsEl, chevronEl, reduced, gyroEnabled = true }) {
     this.stops = stops;             // [{id, t, lock}]
     this.answeredMap = {};         // id -> true once answered
     this.reduced = reduced;
+    this.gyroEnabled = gyroEnabled !== false;
     this.dotsEl = dotsEl;
     this.chevronEl = chevronEl;
     this.currentT = 0;
@@ -97,31 +98,65 @@ export class ScrollRig {
     };
     window.addEventListener('scroll', onScroll, { passive: true });
 
-    window.addEventListener('resize', () => {
-      // keep her at the same story point when the URL bar collapses
+    const onResizeOrOrient = () => {
+      // keep her at the same story point when the URL bar collapses or screen rotates
       window.scrollTo(0, this.pxForT(this.rawT));
+    };
+    window.addEventListener('resize', onResizeOrOrient);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(onResizeOrOrient, 80);
+      setTimeout(onResizeOrOrient, 240);
     });
 
-    // pointer parallax (desktop)
+    // pointer parallax (desktop mouse only)
     window.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'touch') return;
       this.parallax.x = (e.clientX / window.innerWidth - 0.5) * 2;
       this.parallax.y = (e.clientY / window.innerHeight - 0.5) * 2;
     });
-    // touch-drag horizontal as parallax fallback
-    let touchX = null;
-    window.addEventListener('touchstart', (e) => { touchX = e.touches[0].clientX; }, { passive: true });
-    window.addEventListener('touchmove', (e) => {
-      if (touchX === null) return;
-      const dx = e.touches[0].clientX - touchX;
-      this.parallax.x = clamp(dx / 60, -1, 1);
-    }, { passive: true });
-    window.addEventListener('touchend', () => { touchX = null; this.parallax.x = 0; }, { passive: true });
 
-    // gyro bonus — never blocks anything
+    // gyro bonus — subtle, self-centering, orientation-aware
+    let baselineRoll = null;
     const onOrient = (e) => {
-      if (e.gamma == null) return;
-      this._gyro = clamp(e.gamma / 22, -1, 1);
+      if (!this.gyroEnabled || this.reduced) {
+        this._gyro = 0;
+        return;
+      }
+      if (e.gamma == null || e.beta == null) return;
+
+      // Flat on table or face down: ignore erratic gamma jumps
+      if (Math.abs(e.beta) < 18 || Math.abs(e.beta) > 162) {
+        this._gyro = 0;
+        return;
+      }
+
+      // Map device rotation (portrait vs landscape)
+      const angle = (typeof screen !== 'undefined' && screen.orientation && screen.orientation.angle != null)
+        ? screen.orientation.angle
+        : (typeof window.orientation === 'number' ? window.orientation : 0);
+
+      let roll = e.gamma;
+      if (angle === 90) {
+        roll = e.beta - 45;
+      } else if (angle === -90 || angle === 270) {
+        roll = -(e.beta - 45);
+      } else if (angle === 180) {
+        roll = -e.gamma;
+      }
+
+      // Slowly adapt to the user's natural holding posture so the scene doesn't stay tilted
+      if (baselineRoll === null) {
+        baselineRoll = roll;
+      } else {
+        baselineRoll += (roll - baselineRoll) * 0.02;
+      }
+
+      let diff = roll - baselineRoll;
+      // 2.5 degree deadzone to eliminate hand tremor
+      if (Math.abs(diff) < 2.5) diff = 0;
+      else diff -= Math.sign(diff) * 2.5;
+
+      this._gyro = clamp(diff / 42, -0.35, 0.35);
     };
     window.addEventListener('deviceorientation', onOrient);
   }

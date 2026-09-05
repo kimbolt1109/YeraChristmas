@@ -168,17 +168,26 @@ export const audio = {
   get muted() { return muted; },
 
   ensure() {
-    if (started) { if (ctx.state === 'suspended') ctx.resume(); return; }
+    if (started) {
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      return;
+    }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    ctx = new AC();
-    master = ctx.createGain();
-    master.gain.value = muted ? 0 : MASTER;
-    master.connect(ctx.destination);
-    noiseBuf = makeNoiseBuffer(2);
-    started = true;
-    startBed();
-    if (ctx.state === 'suspended') ctx.resume();
+    try {
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = muted ? 0 : MASTER;
+      master.connect(ctx.destination);
+      noiseBuf = makeNoiseBuffer(2);
+      started = true;
+      startBed();
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    } catch (e) {
+      // AudioContext creation blocked or unsupported
+    }
   },
 
   setMuted(next) {

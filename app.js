@@ -5,7 +5,7 @@ import * as THREE from './vendor/three.module.min.js';
 import { quality, watchFPS, onTierDrop } from './quality.js';
 import { audio } from './audio.js';
 import { Snow } from './snow.js';
-import { createVillage, cameraPose, animateVillage, ANCHORS } from './village.js?v=7';
+import { createVillage, cameraPose, animateVillage, ANCHORS } from './village.js?v=8';
 import { ScrollRig } from './scroll-rig.js';
 
 const STORAGE_KEY = 'yera-christmas-2026';
@@ -91,6 +91,16 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.06;
 
+canvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  running = false;
+});
+canvas.addEventListener('webglcontextrestored', () => {
+  running = true;
+  last = performance.now();
+  requestAnimationFrame(loop);
+});
+
 const { scene, props, glowTex } = createVillage(preset, PLACES.map((p) => p.photo));
 const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 420);
 const snow = new Snow(scene, preset.snow);
@@ -101,6 +111,7 @@ const rig = new ScrollRig({
   dotsEl: document.getElementById('dots'),
   chevronEl: document.getElementById('chevron'),
   reduced,
+  gyroEnabled: preset.gyro !== false,
 });
 window.rig = rig;
 if (state.letterOpened) rig.answer('gate');
@@ -209,7 +220,7 @@ function frameOverlays(t) {
       const botLim = vvH - safeBottom() - (h / 2 + 80);
       if (botLim <= topLim) y = vvH / 2; // card taller than the stage: center
       else y = Math.min(Math.max(y, topLim), botLim);
-    } else {
+    } else if (item.clampTo === 'screen') {
       const w = box.offsetWidth || 60, h = box.offsetHeight || 60;
       x = Math.min(Math.max(x, w / 2 + 6), vw - w / 2 - 12);
       y = Math.min(Math.max(y, safeTop() + 60 + h / 2), vvH - 40 - h / 2);
@@ -856,6 +867,8 @@ ddayEl.style.transformOrigin = '50% 0%';
 ddayEl.addEventListener('click', (e) => {
   if (e.target.id === 'letter-save') saveLetterImage();
 });
+const saveBtn = ddayEl.querySelector('#letter-save');
+if (saveBtn) saveBtn.addEventListener('click', saveLetterImage);
 const treeFooter = addOverlay({
   html: `<div id="tree-footer">This letter is only for Yera noona.</div>`,
   anchor: null, stop: 'tree', pin: { start: 0.93, end: 1.02 }, interactive: false, clampTo: 'none',
@@ -1161,8 +1174,13 @@ function saveLetterImage() {
     const lines = [];
     lines.push(['— A Christmas letter —', '28px Georgia', '#7c1f2c']);
     document.querySelectorAll('#letter-body p, #letter-body .letter-sec').forEach((n) => {
-      const txt = n.textContent.replace(/\s+/g, ' ').trim();
-      if (txt) lines.push([txt, '22px sans-serif', '#2a2118']);
+      const clone = n.cloneNode(true);
+      clone.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+      const text = clone.textContent.trim();
+      text.split('\n').forEach((line) => {
+        const clean = line.replace(/\s+/g, ' ').trim();
+        if (clean) lines.push([clean, '22px sans-serif', '#2a2118']);
+      });
     });
     lines.push([document.getElementById('dd-ribbon').textContent, '26px Georgia', '#7c1f2c']);
     lines.push([document.getElementById('dday-big').textContent, '34px Georgia', '#241b12']);
@@ -1269,6 +1287,7 @@ intro.addEventListener('click', (e) => { if (e.target === intro || e.target.clos
 onTierDrop((tier) => {
   renderer.setPixelRatio(quality.preset.dpr);
   snow.setCount(quality.preset.snow);
+  rig.gyroEnabled = quality.preset.gyro !== false;
   if (tier === 'low') toast('Dropping to a lighter village so it stays smooth.');
 });
 watchFPS();
@@ -1284,6 +1303,10 @@ function onResize() {
 }
 onResize();
 window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => {
+  setTimeout(onResize, 80);
+  setTimeout(onResize, 240);
+});
 if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 
 // ————— camera save —————
